@@ -26,7 +26,6 @@ Usage:
 import requests
 import threading
 import time
-from audio.mic import MicInput
 from utils.logger import get_logger
 from utils.config import SETTINGS
 
@@ -125,60 +124,28 @@ def speak_feedback(endpoint: str, state: dict | None):
 
 # ── Main controller class ─────────────────────────────────────────
 class HomeAutomationController:
-    def __init__(self):
-        self.mic = MicInput()
-        self._running = False
-        self._thread = None
-
-    def process_once(self):
-        """Listen for one voice command and execute it."""
-        text = self.mic.listen(timeout=10, phrase_time_limit=5)
-        if text is None:
-            return
-
-        endpoint = parse_voice_command(text)
-        if endpoint is None:
-            logger.info("No actionable command detected.")
-            return
-
-        state = send_command(endpoint)
-        speak_feedback(endpoint, state)
-
-    # ── Background loop ───────────────────────────────────────────
-    def _loop(self):
-        logger.info("Home Automation voice loop started.")
-        while self._running:
-            try:
-                self.process_once()
-            except Exception as e:
-                logger.error(f"HomeAutomation loop error: {e}")
-                time.sleep(1)
-
-    def start(self):
-        """Start listening in a background thread."""
-        if self._running:
-            return
-        self._running = True
-        self._thread = threading.Thread(target=self._loop, daemon=True)
-        self._thread.start()
-        logger.info("HomeAutomationController started.")
-
-    def stop(self):
-        self._running = False
-        logger.info("HomeAutomationController stopped.")
+    """Send commands to the NodeMCU. Voice input is handled by VoiceBrain."""
 
     def send_direct(self, endpoint: str) -> dict | None:
-        """Send a command directly without voice (useful from web_server.py)."""
+        """Send a command directly (used by voice_brain or web_server)."""
         state = send_command(endpoint)
         speak_feedback(endpoint, state)
         return state
 
-# ── Standalone entry point ────────────────────────────────────────
+# ── Standalone entry point (keyboard tester) ──────────────────────
 if __name__ == "__main__":
-    ctrl = HomeAutomationController()
-    print("Home Automation ready. Speak a command (Ctrl+C to exit).")
-    try:
-        while True:
-            ctrl.process_once()
-    except KeyboardInterrupt:
-        print("\nExiting.")
+    print("Home Automation Tester")
+    print("Commands: light/1/on, light/2/off, door/4/on, all/off, status, quit")
+    while True:
+        cmd = input(">> ").strip()
+        if cmd in ("quit", "exit"):
+            break
+        if not cmd.startswith("/"):
+            cmd = "/" + cmd
+        endpoint = parse_voice_command(cmd) if " " in cmd else cmd
+        if endpoint:
+            send_command(endpoint)
+        else:
+            print(f"Sending: {cmd}")
+            send_command(cmd)
+

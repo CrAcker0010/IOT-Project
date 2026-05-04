@@ -1,8 +1,15 @@
+"""
+main.py — IOT Robot Main Controller
+=====================================
+Entry point for the autonomous multipurpose robotic car.
+Run: python3 main.py
+"""
+
 import time
 import sys
 import RPi.GPIO as GPIO
 from utils.logger import get_logger
-from utils.config import PINS
+from utils.config import PINS, SETTINGS
 from utils.lcd_display import LCDDisplay
 from sensors.ultrasonic import UltrasonicSensor
 from sensors.sweeper_sonar import SweeperSonar
@@ -22,50 +29,67 @@ from communication.web_server import init_web_server, start_server_thread
 
 logger = get_logger("MainController")
 
+
 class RobotSystem:
     def __init__(self):
         logger.info("Initializing Robot System...")
-        
-        # Actuators
+
+        # ── Actuators ─────────────────────────────────────────────
         self.motors = MotorController()
         self.servos = ServoController()
-        
-        # Sensors
+
+        # ── Sensors ───────────────────────────────────────────────
         self.us_sweeper = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Sweeper")
         self.us_back    = UltrasonicSensor(PINS["US_BACK_TRIG"],  PINS["US_BACK_ECHO"],  "Back")
         self.us_down    = UltrasonicSensor(PINS["US_DOWN_TRIG"],  PINS["US_DOWN_ECHO"],  "Down")
-        self.gyroscope  = MPU6050()
+
+        # Gyroscope (I2C — may fail if not wired)
+        self.gyroscope = None
+        try:
+            self.gyroscope = MPU6050()
+        except Exception as e:
+            logger.warning(f"Gyroscope not available: {e}")
 
         # SweeperSonar handles the physical rotation of the front sensor
         self.sonar = SweeperSonar(self.us_sweeper, self.servos)
 
-        # Peripherals
+        # ── Peripherals ───────────────────────────────────────────
         self.speaker = SpeakerOutput()
         self.camera  = CameraStream()
 
-        # Modes
+        # ── Modes ─────────────────────────────────────────────────
         self.autonomous_mode   = AutonomousMode(self.motors, self.sonar, self.us_back, self.us_down, self.speaker)
         self.pet_mode          = PetMode(self.motors, self.servos, self.speaker, self.camera)
         self.surveillance_mode = SurveillanceMode(self.camera, self.speaker)
         self.rescue_mode       = RescueMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
         self.search_mode       = SearchMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
         self.vision_drive_mode = VisionDriveMode(self.motors, self.camera, self.servos, self.speaker)
-        
-        # Voice Brain (chatbot + command dispatcher)
+
+        # ── Voice Brain (chatbot + command dispatcher) ────────────
         self.voice_brain = VoiceBrain(robot=self)
-        
-        # LCD Display (I2C 0x27)
+
+        # ── LCD Display (I2C 0x27) ────────────────────────────────
         self.lcd = LCDDisplay()
-        
-        # Current state
+
+        # ── Current state ─────────────────────────────────────────
         self.current_mode = None
         logger.info("System fully initialized.")
+
+    # ── Mode registry (avoids repetitive if/elif chains) ──────────
+    _MODE_MAP = {
+        "autonomous":   "autonomous_mode",
+        "pet":          "pet_mode",
+        "surveillance": "surveillance_mode",
+        "rescue":       "rescue_mode",
+        "search":       "search_mode",
+        "vision_drive": "vision_drive_mode",
+    }
 
     def start(self):
         try:
             self.speaker.greet()
             self.camera.start()
-            self.voice_brain.start()   # ← start listening for voice commands
+            self.voice_brain.start()
 
             # Show boot info on LCD
             self.lcd.show_startup()
@@ -79,27 +103,28 @@ class RobotSystem:
             except Exception:
                 ip = "Check router"
             self.lcd.show_ip(ip)
-            
+            logger.info(f"Dashboard: http://{ip}:{SETTINGS['STREAM_PORT']}")
+
+            # Start web server
             logger.info("Initializing web interface...")
             init_web_server(self)
-            start_server_thread()
-            
-            logger.info("Starting central control loop...")
-            
-            # Default to autonomous mode for testing
-            self.set_mode("autonomous")
-            
+            start_server_thread(port=SETTINGS["STREAM_PORT"])
+
+            logger.info("Robot ready. Entering main loop...")
+
+            # Start idle (user picks mode from dashboard)
+            self.set_mode("idle")
+
             while True:
-                # Main loop: Here you could add logic to switch modes
-                # e.g., listening to API requests, voice commands, or NodeMCU messages
-                
-                # Periodically check road quality
-                if self.gyroscope.detect_rough_road():
-                    logger.warning("Rough road detected! Logging data...")
-                    # Logic to save to report...
-                
+                # Periodic gyroscope check (if available)
+                if self.gyroscope:
+                    try:
+                        if self.gyroscope.detect_rough_road():
+                            logger.warning("Rough road detected!")
+                    except Exception:
+                        pass
                 time.sleep(1)
-                
+
         except KeyboardInterrupt:
             logger.info("Interrupted by user. Shutting down...")
             self.cleanup()
@@ -109,35 +134,24 @@ class RobotSystem:
 
     def set_mode(self, mode_name, search_target: str = None):
         # Stop current mode
-        if self.current_mode == "autonomous":
-            self.autonomous_mode.stop()
-        elif self.current_mode == "pet":
-            self.pet_mode.stop()
-        elif self.current_mode == "surveillance":
-            self.surveillance_mode.stop()
-        elif self.current_mode == "rescue":
-            self.rescue_mode.stop()
-        elif self.current_mode == "search":
-            self.search_mode.stop()
-        elif self.current_mode == "vision_drive":
-            self.vision_drive_mode.stop()
-            
+        if self.current_mode and self.current_mode in self._MODE_MAP:
+            mode_obj = getattr(self, self._MODE_MAP[self.current_mode], None)
+            if mode_obj and hasattr(mode_obj, 'stop'):
+                try:
+                    mode_obj.stop()
+                except Exception as e:
+                    logger.error(f"Error stopping {self.current_mode}: {e}")
+
         self.current_mode = mode_name
-        self.lcd.show_mode(mode_name)   # ← update LCD on every mode change
-        
+        self.lcd.show_mode(mode_name)
+
         # Start new mode
-        if mode_name == "autonomous":
-            self.autonomous_mode.start()
-        elif mode_name == "pet":
-            self.pet_mode.start()
-        elif mode_name == "surveillance":
-            self.surveillance_mode.start()
-        elif mode_name == "rescue":
-            self.rescue_mode.start()
-        elif mode_name == "search":
-            self.search_mode.start(target=search_target)
-        elif mode_name == "vision_drive":
-            self.vision_drive_mode.start()
+        if mode_name in self._MODE_MAP:
+            mode_obj = getattr(self, self._MODE_MAP[mode_name])
+            if mode_name == "search":
+                mode_obj.start(target=search_target)
+            else:
+                mode_obj.start()
         elif mode_name == "idle":
             self.motors.stop()
         else:
@@ -160,6 +174,7 @@ class RobotSystem:
         except Exception: pass
         logger.info("Cleanup complete.")
         sys.exit(0)
+
 
 if __name__ == "__main__":
     robot = RobotSystem()

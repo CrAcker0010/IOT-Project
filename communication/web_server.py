@@ -137,10 +137,7 @@ def chat():
     if not message:
         return jsonify({"reply": "Please say something."})
     try:
-        from audio.voice_brain import VoiceBrain
-        if not hasattr(robot_instance, '_voice_brain'):
-            robot_instance._voice_brain = VoiceBrain(robot=robot_instance)
-        reply = robot_instance._voice_brain.chat_text(message)
+        reply = robot_instance.voice_brain.chat_text(message)
         return jsonify({"reply": reply})
     except Exception as e:
         logger.error(f"Chat error: {e}")
