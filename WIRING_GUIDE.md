@@ -303,17 +303,20 @@ No code change needed — both show up as `/dev/video0`.
 
 ---
 
-## 12. USB Microphone
+## 12. Sound Sensor Module (KY-037/038)
+
+This module has a microphone and a potentiometer to adjust sensitivity. It detects sound presence (like a clap) but **cannot** process spoken words for the AI.
 
 ```
-USB mic → any Pi USB port
+Module Pin       →  Raspberry Pi
+─────────────────────────────────────
+VCC              →  Pin 2 or 4 (5V)
+GND              →  Pin 6 or 9 (GND)
+D0 (Digital Out) →  Pin 24 (GPIO 8)
+A0 (Analog Out)  →  (Leave Disconnected — Pi has no ADC)
 ```
 
-Verify it's detected:
-```bash
-arecord -l
-# Should show "card X: ..." with your mic listed
-```
+> 💡 **Usage:** You can use this to make the robot stop if you clap loudly or to wake it up, but you will still need a USB microphone if you want to speak commands like "Go to the kitchen."
 
 ---
 
@@ -380,7 +383,8 @@ USB cable from any 5V source (power bank, wall adapter, Pi USB)
 | **GPS TX→Pi RX** | USB adapter | — | Green |
 | **Speaker** | 3.5mm jack | — | via PAM8403 amp |
 | **Camera** | CSI or USB | — | Ribbon / USB |
-| **Microphone** | USB port | — | USB |
+| **Sound Sensor D0** | 24 | 8 | White |
+| **Camera** | CSI or USB | — | Ribbon / USB |
 
 ---
 

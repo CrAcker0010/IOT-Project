@@ -1,21 +1,13 @@
 """
 voice_brain.py
 ==============
-Central voice command dispatcher + AI chatbot for the IOT Robot.
+Central command dispatcher + AI chatbot for the IOT Robot.
 
-This is the single entry-point for ALL voice interaction. It:
-  1. Continuously listens to the microphone.
-  2. Checks if the spoken text is an ACTION command → executes it.
-  3. If no command matches → routes to the Gemini chatbot for a reply.
-  4. Speaks every response back via the speaker.
+Input sources:
+  1. CLAP DETECTOR (physical) — counts clap patterns (1-4) on the sound sensor.
+  2. WEB DASHBOARD (remote)   — text/voice commands via browser Speech API.
 
-Run standalone:
-    python -m audio.voice_brain
-
-Or integrate into RobotSystem (main.py):
-    from audio.voice_brain import VoiceBrain
-    self.voice_brain = VoiceBrain(robot=self)
-    self.voice_brain.start()
+Both routes share the same command engine and Gemini chatbot.
 """
 
 import os
@@ -23,7 +15,7 @@ import time
 import threading
 import google.generativeai as genai
 
-from audio.mic import MicInput
+from audio.clap_detector import ClapDetector
 from audio.speaker_output import SpeakerOutput
 from utils.logger import get_logger
 from utils.config import SETTINGS
@@ -31,9 +23,14 @@ from utils.config import SETTINGS
 logger = get_logger("VoiceBrain")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# WAKE WORD  (optional — set to None to process every utterance)
+# CLAP ACTION MAP — maps clap counts to robot actions
 # ─────────────────────────────────────────────────────────────────────────────
-WAKE_WORDS = ["hey robot", "robot", "autobot"]   # any of these activates listening
+CLAP_ACTIONS = {
+    1: {"action": "stop_motors",      "reply": "Emergency stop."},
+    2: {"action": "mode_autonomous",  "reply": "Toggling autonomous mode."},
+    3: {"action": "mode_rescue",      "reply": "Toggling rescue mode."},
+    4: {"action": "mode_search",      "reply": "Toggling search mode."},
+}
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -246,11 +243,11 @@ class VoiceBrain:
             robot : RobotSystem instance from main.py (or None for standalone).
         """
         self.robot   = robot
-        self.mic     = MicInput()
         self.speaker = robot.speaker if robot else SpeakerOutput()
         self.running = False
-        self.thread  = None
-        self._awake  = (not WAKE_WORDS)   # Always awake if WAKE_WORDS is empty
+
+        # Clap detector — physical input
+        self.clap_detector = ClapDetector(callback=self._on_clap)
 
         # ── Gemini Chatbot ────────────────────────────────────────
         self.chat = None
@@ -370,25 +367,48 @@ class VoiceBrain:
             logger.error(f"Chatbot error: {e}")
             return "Sorry, I had trouble thinking of a response."
 
-    # ── Process a single utterance ────────────────────────────────
+    # ── Clap handler (physical input) ──────────────────────────────
+    def _on_clap(self, clap_count: int):
+        """Called by ClapDetector when a clap pattern is detected."""
+        logger.info(f"Clap pattern received: {clap_count} clap(s)")
+
+        mapping = CLAP_ACTIONS.get(clap_count)
+        if not mapping:
+            logger.info(f"No action for {clap_count} claps.")
+            return
+
+        action = mapping["action"]
+        reply  = mapping["reply"]
+
+        # Toggle logic: if already in that mode, go idle instead
+        r = self.robot
+        if r and action.startswith("mode_"):
+            mode_name = action.replace("mode_", "")
+            if r.current_mode == mode_name:
+                r.set_mode("idle")
+                reply = f"Stopped {mode_name} mode."
+            else:
+                self._execute_action(action)
+        else:
+            self._execute_action(action)
+
+        # Show on LCD
+        if r and hasattr(r, 'lcd'):
+            r.lcd.show_voice_command(f"{clap_count} claps: {action}")
+
+        logger.info(f"Clap reply: {reply}")
+        self.speaker.speak(reply)
+
+    # ── Process a single utterance (from web UI) ──────────────────
     def process_utterance(self, text: str):
         """Parse text, execute command or chatbot reply, speak response."""
         if not text:
             return
 
         t = text.lower().strip()
-        logger.info(f"Utterance: '{t}'")
+        logger.info(f"Utterance (web): '{t}'")
 
-        # Wake word check
-        if WAKE_WORDS and not self._awake:
-            if any(w in t for w in WAKE_WORDS):
-                self._awake = True
-                self.speaker.speak("Yes? I'm listening.")
-            return
-
-        # Reset awake after each handled command (require wake word again)
-        # Comment out the next line to stay always-on without wake word
-        # self._awake = False
+        reply = None
 
         # Try to match a command
         entry = self._match_command(t)
@@ -410,38 +430,27 @@ class VoiceBrain:
             logger.info(f"Robot replies: {reply}")
             self.speaker.speak(reply)
 
-    # ── Background listen loop ────────────────────────────────────
-    def _loop(self):
-        logger.info("VoiceBrain listening loop started.")
-        while self.running:
-            try:
-                text = self.mic.listen(timeout=8, phrase_time_limit=8)
-                if text:
-                    self.process_utterance(text)
-            except Exception as e:
-                logger.error(f"VoiceBrain loop error: {e}")
-                time.sleep(1)
-
     # ── Public API ────────────────────────────────────────────────
     def start(self):
         if self.running:
             return
         self.running = True
-        self.thread  = threading.Thread(target=self._loop, daemon=True)
-        self.thread.start()
-        logger.info("VoiceBrain started.")
+        self.clap_detector.start()   # ← physical clap listener
+        logger.info("VoiceBrain started (clap input + web UI).")
         self.speaker.speak(
-            f"Voice assistant ready. {'Say ' + WAKE_WORD + ' to activate.' if WAKE_WORD else 'Listening for commands.'}"
+            "Robot assistant ready. Clap once to stop, twice for autonomous, "
+            "three times for rescue, four for search. Or use the web dashboard."
         )
 
     def stop(self):
         self.running = False
+        self.clap_detector.stop()
         logger.info("VoiceBrain stopped.")
 
     def chat_text(self, text: str) -> str:
         """
-        Send a text message directly to the chatbot (used by web UI).
-        Returns the reply string without speaking it.
+        Send a text message directly (used by web UI / REST API).
+        Executes command if matched, else chatbot. Returns the reply string.
         """
         entry = self._match_command(text)
         if entry:
@@ -454,7 +463,7 @@ class VoiceBrain:
 if __name__ == "__main__":
     brain = VoiceBrain(robot=None)
     brain.start()
-    print(f"Voice Brain running. Wake word: '{WAKE_WORD}'. Ctrl+C to exit.")
+    print("VoiceBrain running (clap detection). Ctrl+C to exit.")
     try:
         while True:
             time.sleep(1)

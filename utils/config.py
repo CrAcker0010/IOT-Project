@@ -28,6 +28,7 @@ PINS = {
     
     # Relays & Indicators
     "BUZZER": 18,
+    "MIC_PIN": 8,   # D0 pin of the Sound Sensor Module
     "LED_RED": 23,
     "LED_GREEN": 24,
     "LED_BLUE": 25,
