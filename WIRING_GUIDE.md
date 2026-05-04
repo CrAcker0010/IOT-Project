@@ -71,29 +71,23 @@ Each sensor has 4 pins: VCC, TRIG, ECHO, GND.
 > `ECHO → 1kΩ resistor → Pi GPIO` and `between Pi GPIO and GND put a 2kΩ resistor`
 
 ```
-FRONT sensor:
+FRONT (Sweeper) sensor:
   VCC   →  Pin 2  (5V)
   TRIG  →  Pin 11 (GPIO 17)
   ECHO  →  Pin 13 (GPIO 27)  ← through 1kΩ/2kΩ voltage divider
   GND   →  Pin 14 (GND)
 
-LEFT sensor:
+BACK sensor (for reversing):
   VCC   →  Pin 2  (5V)
   TRIG  →  Pin 15 (GPIO 22)
   ECHO  →  Pin 19 (GPIO 10)  ← through voltage divider
   GND   →  Pin 20 (GND)
 
-RIGHT sensor:
+DOWN sensor (cliff / stair detection):
   VCC   →  Pin 4  (5V)
   TRIG  →  Pin 21 (GPIO 9)
   ECHO  →  Pin 23 (GPIO 11)  ← through voltage divider
   GND   →  Pin 25 (GND)
-
-DOWN sensor (cliff / stair detection):
-  VCC   →  Pin 4  (5V)
-  TRIG  →  Pin 38 (GPIO 20)
-  ECHO  →  Pin 40 (GPIO 21)  ← through voltage divider
-  GND   →  Pin 39 (GND)
 ```
 
 ### Voltage Divider Wiring (for each ECHO pin)
@@ -118,14 +112,14 @@ Standard hobby servos (SG90 / MG996R) — 3 wires each.
 
 ```
 PAN servo (horizontal):
-  Signal (Orange/White)  →  Pin 8  (GPIO 14)
+  Signal (Orange/White)  →  Pin 38 (GPIO 20)
   VCC    (Red)           →  5V from BEC / battery regulator
-  GND    (Brown/Black)   →  Pin 9  (GND)  ← also connect to BEC GND
+  GND    (Brown/Black)   →  Pin 39 (GND)
 
 TILT servo (vertical):
-  Signal (Orange/White)  →  Pin 10 (GPIO 15)
+  Signal (Orange/White)  →  Pin 40 (GPIO 21)
   VCC    (Red)           →  5V from BEC / battery regulator
-  GND    (Brown/Black)   →  Pin 9  (GND)
+  GND    (Brown/Black)   →  Pin 39 (GND)
 ```
 
 ---
@@ -198,12 +192,7 @@ RX               →  Pin 8  (GPIO 14 / TXD)  ← GPS RX goes to Pi TX
 GND              →  Pin 14 (GND)
 ```
 
-> ⚠️ **CONFLICT!** GPIO 14 and 15 are also used for SERVO_PAN and SERVO_TILT.  
-> **FIX:** If you're using GPS, connect it via a **USB-to-UART adapter** instead, and change `config.py`:
-> ```python
-> "GPS_PORT": "/dev/ttyUSB1"   # USB UART adapter
-> ```
-> This frees GPIO 14/15 for the servos.
+> ✅ **NO CONFLICT:** Servos have been moved to GPIO 20/21. GPIO 14 and 15 are now fully available for your GPS module.
 
 ---
 
@@ -371,17 +360,15 @@ USB cable from any 5V source (power bank, wall adapter, Pi USB)
 | **Motor IN2** | 31 | 6 | Yellow |
 | **Motor IN3** | 37 | 26 | Yellow |
 | **Motor IN4** | 35 | 19 | Yellow |
-| **US Front TRIG** | 11 | 17 | Blue |
-| **US Front ECHO** | 13 | 27 | Green (with divider) |
-| **US Left TRIG** | 15 | 22 | Blue |
-| **US Left ECHO** | 19 | 10 | Green (with divider) |
-| **US Right TRIG** | 21 | 9 | Blue |
-| **US Right ECHO** | 23 | 11 | Green (with divider) |
-| **US Down TRIG** | 38 | 20 | Blue |
-| **US Down ECHO** | 40 | 21 | Green (with divider) |
+| **US Sweeper TRIG** | 11 | 17 | Blue |
+| **US Sweeper ECHO** | 13 | 27 | Green (with divider) |
+| **US Back TRIG** | 15 | 22 | Blue |
+| **US Back ECHO** | 19 | 10 | Green (with divider) |
+| **US Down TRIG** | 21 | 9 | Blue |
+| **US Down ECHO** | 23 | 11 | Green (with divider) |
 | **DHT11 DATA** | 7 | 4 | White |
-| **Servo PAN** | 8 | 14 | Orange |
-| **Servo TILT** | 10 | 15 | Orange |
+| **Servo PAN** | 38 | 20 | Orange |
+| **Servo TILT** | 40 | 21 | Orange |
 | **Buzzer +** | 12 | 18 | Red |
 | **LED Red** | 16 | 23 | Red |
 | **LED Green** | 18 | 24 | Green |

@@ -30,22 +30,21 @@ class RobotSystem:
         self.motors = MotorController()
         self.servos = ServoController()
         
-        # Sensors — single HC-SR04 mounted on the pan-tilt servo
-        self.us_sensor = UltrasonicSensor(
-            PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Sweeper"
-        )
-        self.gyroscope = MPU6050()
+        # Sensors
+        self.us_sweeper = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Sweeper")
+        self.us_back    = UltrasonicSensor(PINS["US_BACK_TRIG"],  PINS["US_BACK_ECHO"],  "Back")
+        self.us_down    = UltrasonicSensor(PINS["US_DOWN_TRIG"],  PINS["US_DOWN_ECHO"],  "Down")
+        self.gyroscope  = MPU6050()
 
-        # SweeperSonar: rotates the servo to get left/front/right readings
-        # NOTE: ServosController must be initialized before this
-        self.sonar = SweeperSonar(self.us_sensor, self.servos)
+        # SweeperSonar handles the physical rotation of the front sensor
+        self.sonar = SweeperSonar(self.us_sweeper, self.servos)
 
         # Peripherals
         self.speaker = SpeakerOutput()
         self.camera  = CameraStream()
 
-        # Modes — all receive sonar instead of a fixed sensors dict
-        self.autonomous_mode   = AutonomousMode(self.motors, self.sonar, self.speaker)
+        # Modes
+        self.autonomous_mode   = AutonomousMode(self.motors, self.sonar, self.us_back, self.us_down, self.speaker)
         self.pet_mode          = PetMode(self.motors, self.servos, self.speaker, self.camera)
         self.surveillance_mode = SurveillanceMode(self.camera, self.speaker)
         self.rescue_mode       = RescueMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)

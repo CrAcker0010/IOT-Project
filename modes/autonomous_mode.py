@@ -29,17 +29,15 @@ OBSTACLE_CM = SETTINGS.get("OBSTACLE_THRESHOLD_CM", 30)
 
 class AutonomousMode:
     """
-    Autonomous driving using a single sweeping ultrasonic sensor.
-
-    Args:
-        motors  : MotorController
-        sonar   : SweeperSonar instance
-        speaker : SpeakerOutput (optional)
+    Autonomous driving using a single sweeping ultrasonic sensor (Front),
+    a fixed Back sensor, and a fixed Down sensor for cliff detection.
     """
 
-    def __init__(self, motors, sonar, speaker=None):
+    def __init__(self, motors, sonar, us_back, us_down, speaker=None):
         self.motors  = motors
-        self.sonar   = sonar        # SweeperSonar — replaces sensors dict
+        self.sonar   = sonar       # SweeperSonar instance
+        self.us_back = us_back     # UltrasonicSensor instance
+        self.us_down = us_down     # UltrasonicSensor instance
         self.speaker = speaker
         self.running = False
         self.thread  = None
@@ -78,6 +76,16 @@ class AutonomousMode:
         Given a sweep scan dict {left, front, right}, execute
         the appropriate motor command.
         """
+        # ── CLIFF DETECTION (Priority 1) ─────────────────────────
+        down_dist = self.us_down.get_distance()
+        # If distance to floor is > 20cm, we are at a cliff or stairs
+        if down_dist > 20 or down_dist < 0:
+            logger.error(f"CLIFF DETECTED! Down distance: {down_dist}cm. Stopping.")
+            self.motors.stop()
+            if self.speaker:
+                self.speaker.speak("Cliff detected! Halting for safety.")
+            return
+
         front = scan["front"]
         left  = scan["left"]
         right = scan["right"]
@@ -90,8 +98,15 @@ class AutonomousMode:
         # ── DANGER: obstacle extremely close ──────────────────────
         if 0 < front < DANGER_CM:
             logger.warning(f"DANGER! Front={front}cm. Reversing.")
-            self.motors.backward(speed=50)
-            time.sleep(0.5)
+            
+            # Check back before reversing
+            back_dist = self.us_back.get_distance()
+            if back_dist > 15 or back_dist < 0:
+                self.motors.backward(speed=50)
+                time.sleep(0.5)
+            else:
+                logger.warning("Cannot reverse! Path blocked.")
+            
             self.motors.stop()
 
             # After reversing, turn toward the clearer side
