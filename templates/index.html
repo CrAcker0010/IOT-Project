@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IOT Robot Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg:      #080c14;
+            --panel:   #0f1623;
+            --border:  #1e2d45;
+            --accent:  #3b82f6;
+            --green:   #10b981;
+            --red:     #ef4444;
+            --yellow:  #f59e0b;
+            --purple:  #8b5cf6;
+            --text:    #e2e8f0;
+            --muted:   #64748b;
+            --radius:  14px;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* ── Top Bar ── */
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.75rem 1.5rem;
+            background: var(--panel);
+            border-bottom: 1px solid var(--border);
+        }
+        .topbar-brand { font-weight: 800; font-size: 1.1rem; letter-spacing: 1px; color: var(--accent); }
+        .topbar-status { display: flex; align-items: center; gap: 0.5rem; font-size: 0.8rem; color: var(--muted); }
+        .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green);
+               animation: blink 2s infinite; }
+        @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+        #current-mode-badge {
+            padding: 0.25rem 0.75rem; border-radius: 99px; font-size: 0.75rem;
+            font-weight: 600; background: var(--accent); color: #fff;
+        }
+
+        /* ── Main grid ── */
+        .main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 240px 1fr 280px;
+            grid-template-rows: 1fr auto;
+            gap: 1rem;
+            padding: 1rem;
+        }
+
+        /* ── Panels ── */
+        .panel {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+        }
+        .panel-title {
+            font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+            letter-spacing: 2px; color: var(--muted); margin-bottom: 0.75rem;
+        }
+
+        /* ── Camera ── */
+        .camera-wrap {
+            grid-row: 1;
+            grid-column: 2;
+            display: flex;
+            flex-direction: column;
+            gap: 0.75rem;
+        }
+        #video-feed {
+            width: 100%; border-radius: var(--radius);
+            background: #000; aspect-ratio: 4/3;
+            object-fit: cover;
+            border: 1px solid var(--border);
+        }
+
+        /* ── D-pad ── */
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 56px);
+            grid-template-rows: repeat(3, 56px);
+            gap: 6px;
+            margin: 0 auto;
+        }
+        .dpad-btn {
+            width: 56px; height: 56px;
+            border-radius: 50%;
+            border: 2px solid var(--border);
+            background: linear-gradient(145deg, #1a2540, #0f1623);
+            color: var(--text);
+            font-size: 1.3rem;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: all 0.1s;
+            box-shadow: 0 4px 0 #060a10;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+        .dpad-btn:active, .dpad-btn.pressed {
+            transform: translateY(4px);
+            box-shadow: none;
+            background: var(--accent);
+        }
+        .dpad-stop {
+            background: linear-gradient(145deg, #7f1d1d, #450a0a);
+            border-color: var(--red);
+        }
+        .dpad-stop:active { background: var(--red); }
+        .dn1 { grid-column:2; grid-row:1; }
+        .dl2 { grid-column:1; grid-row:2; }
+        .dc2 { grid-column:2; grid-row:2; }
+        .dr2 { grid-column:3; grid-row:2; }
+        .dn3 { grid-column:2; grid-row:3; }
+
+        /* ── Modes ── */
+        .mode-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        .mode-btn {
+            padding: 0.6rem 0.4rem;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #111827;
+            color: var(--text);
+            font-size: 0.72rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-align: center;
+            transition: all 0.2s;
+        }
+        .mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+        .mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .mode-btn.mode-stop { border-color: var(--red); color: var(--red); }
+        .mode-btn.mode-stop:hover { background: var(--red); color: #fff; }
+
+        /* ── Home Automation ── */
+        .relay-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.5rem;
+        }
+        .relay-card {
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: #111827;
+            padding: 0.6rem;
+            text-align: center;
+        }
+        .relay-label { font-size: 0.7rem; color: var(--muted); margin-bottom: 0.4rem; }
+        .relay-toggle {
+            width: 100%;
+            padding: 0.35rem;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.75rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .relay-toggle.off { background: #1e293b; color: var(--muted); }
+        .relay-toggle.on  { background: var(--yellow); color: #000; }
+
+        /* ── Chatbot ── */
+        .chat-col { display: flex; flex-direction: column; gap: 0.75rem; }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 280px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            padding: 0.25rem;
+        }
+        .chat-msg {
+            padding: 0.5rem 0.75rem;
+            border-radius: 10px;
+            font-size: 0.8rem;
+            max-width: 90%;
+            line-height: 1.4;
+        }
+        .chat-msg.user { background: var(--accent); color: #fff; align-self: flex-end; }
+        .chat-msg.bot  { background: #1e293b; color: var(--text); align-self: flex-start; }
+        .chat-input-row {
+            display: flex; gap: 0.5rem;
+        }
+        #chat-input {
+            flex: 1;
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #111827;
+            color: var(--text);
+            font-size: 0.85rem;
+            font-family: inherit;
+        }
+        #chat-input:focus { outline: none; border-color: var(--accent); }
+        .icon-btn {
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            border: none;
+            background: var(--accent);
+            color: #fff;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: background 0.2s;
+        }
+        .icon-btn:hover { background: #2563eb; }
+        .icon-btn.listening { background: var(--red); animation: pulse 1.5s infinite; }
+        @keyframes pulse {
+            0%   { box-shadow: 0 0 0 0 rgba(239,68,68,0.6); }
+            70%  { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+            100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+
+        /* ── Search target ── */
+        #search-target {
+            width: 100%;
+            padding: 0.4rem 0.6rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: #111827;
+            color: var(--text);
+            font-size: 0.8rem;
+            margin-top: 0.25rem;
+        }
+
+        /* ── Bottom bar ── */
+        .bottom-bar {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 0.5rem 1rem;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            font-size: 0.75rem;
+            color: var(--muted);
+        }
+        .bottom-bar span { color: var(--text); font-family: 'JetBrains Mono', monospace; }
+
+        /* ── Portrait lock ── */
+        .portrait-warning {
+            display: none;
+            position: fixed; inset: 0; z-index: 9999;
+            background: var(--bg);
+            flex-direction: column; align-items: center; justify-content: center;
+            text-align: center; padding: 2rem;
+        }
+        .portrait-warning h2 { margin-top: 1rem; }
+        @media (max-width: 896px) and (orientation: portrait) {
+            .portrait-warning { display: flex; }
+            body { overflow: hidden; }
+        }
+        @media (max-width: 900px) {
+            .main { grid-template-columns: 1fr; }
+            .camera-wrap { grid-column: 1; grid-row: auto; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- Portrait warning -->
+<div class="portrait-warning">
+    <svg width="64" height="64" viewBox="0 0 24 24" fill="#3b82f6">
+        <path d="M16 1H8C6.34 1 5 2.34 5 4v16c0 1.66 1.34 3 3 3h8c1.66 0
+        3-1.34 3-3V4c0-1.66-1.34-3-3-3zm1 18c0 .55-.45 1-1
+        1H8c-.55 0-1-.45-1-1V6h10v13z"/>
+    </svg>
+    <h2>Rotate to Landscape</h2>
+    <p>Please rotate your device to use the dashboard.</p>
+</div>
+
+<!-- Top bar -->
+<div class="topbar">
+    <div class="topbar-brand">🤖 IOT ROBOT</div>
+    <div class="topbar-status">
+        <div class="dot"></div> Live
+        &nbsp;|&nbsp; Mode: <span id="current-mode-badge">idle</span>
+    </div>
+</div>
+
+<!-- Main grid -->
+<div class="main">
+
+    <!-- LEFT: Modes + Home Automation -->
+    <div style="display:flex;flex-direction:column;gap:0.75rem;">
+
+        <div class="panel">
+            <div class="panel-title">🚗 Robot Modes</div>
+            <div class="mode-grid">
+                <button class="mode-btn" onclick="setMode('autonomous')">🧭 Autonomous</button>
+                <button class="mode-btn" onclick="setMode('vision_drive')">📷 Vision Drive</button>
+                <button class="mode-btn" onclick="setMode('pet')">🐕 Pet Mode</button>
+                <button class="mode-btn" onclick="setMode('surveillance')">👁 Surveillance</button>
+                <button class="mode-btn" onclick="setMode('rescue')">🆘 Rescue Bot</button>
+                <button class="mode-btn" onclick="openSearch()">🔍 Search Bot</button>
+                <button class="mode-btn mode-stop" style="grid-column:1/-1" onclick="setMode('idle')">⏹ STOP ALL</button>
+            </div>
+            <div style="margin-top:0.5rem;">
+                <input id="search-target" type="text" placeholder="Search target (e.g. red bag)...">
+            </div>
+        </div>
+
+        <div class="panel">
+            <div class="panel-title">💡 Home Automation</div>
+            <div class="relay-grid">
+                <div class="relay-card">
+                    <div class="relay-label">Light 1</div>
+                    <button class="relay-toggle off" id="light1-btn" onclick="toggleLight(1)">OFF</button>
+                </div>
+                <div class="relay-card">
+                    <div class="relay-label">Light 2</div>
+                    <button class="relay-toggle off" id="light2-btn" onclick="toggleLight(2)">OFF</button>
+                </div>
+                <div class="relay-card">
+                    <div class="relay-label">Light 3</div>
+                    <button class="relay-toggle off" id="light3-btn" onclick="toggleLight(3)">OFF</button>
+                </div>
+                <div class="relay-card">
+                    <div class="relay-label">Door 4</div>
+                    <button class="relay-toggle off" id="door4-btn" onclick="toggleDoor()">CLOSED</button>
+                </div>
+            </div>
+            <button class="mode-btn mode-stop" style="width:100%;margin-top:0.5rem" onclick="allOff()">All OFF</button>
+        </div>
+
+    </div>
+
+    <!-- CENTRE: Camera + Drive D-pad -->
+    <div class="camera-wrap">
+        <img id="video-feed" src="/video_feed" alt="Live Camera">
+
+        <div style="display:flex;gap:2rem;justify-content:center;align-items:center;flex-wrap:wrap;">
+            <!-- Movement D-pad -->
+            <div>
+                <div class="panel-title" style="text-align:center;margin-bottom:0.5rem;">Movement</div>
+                <div class="dpad">
+                    <button class="dpad-btn dn1"
+                        onmousedown="hold('forward')" onmouseup="release()"
+                        onmouseleave="release()"
+                        ontouchstart="hold('forward')" ontouchend="release()">↑</button>
+                    <button class="dpad-btn dl2"
+                        onmousedown="hold('left')" onmouseup="release()"
+                        onmouseleave="release()"
+                        ontouchstart="hold('left')" ontouchend="release()">←</button>
+                    <button class="dpad-btn dc2 dpad-stop" onclick="sendCmd('stop')">■</button>
+                    <button class="dpad-btn dr2"
+                        onmousedown="hold('right')" onmouseup="release()"
+                        onmouseleave="release()"
+                        ontouchstart="hold('right')" ontouchend="release()">→</button>
+                    <button class="dpad-btn dn3"
+                        onmousedown="hold('backward')" onmouseup="release()"
+                        onmouseleave="release()"
+                        ontouchstart="hold('backward')" ontouchend="release()">↓</button>
+                </div>
+            </div>
+
+            <!-- Camera D-pad -->
+            <div>
+                <div class="panel-title" style="text-align:center;margin-bottom:0.5rem;">Camera Pan</div>
+                <div class="dpad">
+                    <button class="dpad-btn dn1"
+                        onmousedown="camHold('up')" onmouseup="camRelease()"
+                        onmouseleave="camRelease()"
+                        ontouchstart="camHold('up')" ontouchend="camRelease()">↑</button>
+                    <button class="dpad-btn dl2"
+                        onmousedown="camHold('left')" onmouseup="camRelease()"
+                        onmouseleave="camRelease()"
+                        ontouchstart="camHold('left')" ontouchend="camRelease()">←</button>
+                    <button class="dpad-btn dc2 dpad-stop" onclick="camCmd('reset')">⊙</button>
+                    <button class="dpad-btn dr2"
+                        onmousedown="camHold('right')" onmouseup="camRelease()"
+                        onmouseleave="camRelease()"
+                        ontouchstart="camHold('right')" ontouchend="camRelease()">→</button>
+                    <button class="dpad-btn dn3"
+                        onmousedown="camHold('down')" onmouseup="camRelease()"
+                        onmouseleave="camRelease()"
+                        ontouchstart="camHold('down')" ontouchend="camRelease()">↓</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- RIGHT: Chatbot -->
+    <div class="panel chat-col">
+        <div class="panel-title">🤖 ARIA — AI Chatbot</div>
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-msg bot">Hi! I'm ARIA. Type or speak to control the robot or ask me anything.</div>
+        </div>
+        <div class="chat-input-row">
+            <input id="chat-input" type="text" placeholder="Type a command or question..."
+                   onkeydown="if(event.key==='Enter') sendChat()">
+            <button class="icon-btn" id="mic-btn" onclick="toggleMic()" title="Voice input">🎤</button>
+            <button class="icon-btn" onclick="sendChat()" title="Send">➤</button>
+        </div>
+    </div>
+
+    <!-- Bottom status bar -->
+    <div class="bottom-bar">
+        Mode: <span id="status-mode">idle</span>
+        &nbsp;|&nbsp; Last cmd: <span id="status-cmd">—</span>
+        &nbsp;|&nbsp; Last voice: <span id="status-voice">—</span>
+    </div>
+
+</div><!-- /main -->
+
+<script>
+// ── State ────────────────────────────────────────────────────────
+const lightState = { 1: false, 2: false, 3: false };
+let doorOpen = false;
+let holdInterval = null;
+let camInterval  = null;
+let recognition  = null;
+
+// ── Motor Control ─────────────────────────────────────────────────
+function sendCmd(cmd, speed = 55) {
+    fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd, speed })
+    }).catch(console.error);
+    document.getElementById('status-cmd').textContent = cmd;
+}
+
+function hold(dir) {
+    sendCmd(dir);
+    holdInterval = setInterval(() => sendCmd(dir), 150);
+}
+function release() {
+    clearInterval(holdInterval);
+    holdInterval = null;
+    sendCmd('stop');
+}
+
+// ── Camera Control ────────────────────────────────────────────────
+function camCmd(cmd) {
+    fetch('/api/camera', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: cmd })
+    }).catch(console.error);
+}
+function camHold(dir) {
+    camCmd(dir);
+    camInterval = setInterval(() => camCmd(dir), 180);
+}
+function camRelease() {
+    clearInterval(camInterval);
+    camInterval = null;
+}
+
+// ── Mode Control ──────────────────────────────────────────────────
+function setMode(mode) {
+    // Search mode needs target
+    if (mode === 'search') { openSearch(); return; }
+
+    const endpoint = (mode === 'rescue')       ? '/api/rescue'      :
+                     (mode === 'vision_drive') ? '/api/vision_drive' : null;
+
+    const url  = endpoint || '/api/control';
+    const body = endpoint
+        ? JSON.stringify({ action: 'start' })
+        : JSON.stringify({ command: mode });
+
+    if (!endpoint && mode === 'idle') {
+        // Stop rescue/vision drive too
+        fetch('/api/rescue',       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
+        fetch('/api/vision_drive', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
+        fetch('/api/search',       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
+    }
+
+    if (endpoint) {
+        fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: body
+        }).catch(console.error);
+    } else if (mode !== 'idle') {
+        // pet, surveillance, autonomous handled via chat_text / voice brain
+        sendChatCommand(mode + ' mode');
+    }
+
+    updateModeBadge(mode);
+}
+
+function openSearch() {
+    const target = document.getElementById('search-target').value.trim() || 'any object of interest';
+    fetch('/api/search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'start', target })
+    }).catch(console.error);
+    updateModeBadge('search');
+    addBotMsg(`Search started. Looking for: "${target}"`);
+}
+
+function updateModeBadge(mode) {
+    document.getElementById('current-mode-badge').textContent = mode;
+    document.getElementById('status-mode').textContent = mode;
+    // Highlight active mode button
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+}
+
+// ── Home Automation ───────────────────────────────────────────────
+function toggleLight(n) {
+    lightState[n] = !lightState[n];
+    const on  = lightState[n];
+    const btn = document.getElementById(`light${n}-btn`);
+    btn.textContent = on ? 'ON' : 'OFF';
+    btn.className   = `relay-toggle ${on ? 'on' : 'off'}`;
+    fetch(`/api/control`, {  // routed via chat_text → voice_brain
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: `light_${n}_${on ? 'on' : 'off'}` })
+    }).catch(() => {});
+    // Correct route: use chatbot command dispatcher
+    sendChatCommand(`turn ${on ? 'on' : 'off'} light ${n}`);
+}
+
+function toggleDoor() {
+    doorOpen = !doorOpen;
+    const btn = document.getElementById('door4-btn');
+    btn.textContent = doorOpen ? 'OPEN' : 'CLOSED';
+    btn.className   = `relay-toggle ${doorOpen ? 'on' : 'off'}`;
+    sendChatCommand(doorOpen ? 'open door' : 'close door');
+}
+
+function allOff() {
+    [1, 2, 3].forEach(n => {
+        lightState[n] = false;
+        const btn = document.getElementById(`light${n}-btn`);
+        btn.textContent = 'OFF'; btn.className = 'relay-toggle off';
+    });
+    doorOpen = false;
+    const db = document.getElementById('door4-btn');
+    db.textContent = 'CLOSED'; db.className = 'relay-toggle off';
+    sendChatCommand('turn off all');
+}
+
+// ── Chatbot ───────────────────────────────────────────────────────
+function addUserMsg(text) {
+    const el = document.createElement('div');
+    el.className = 'chat-msg user';
+    el.textContent = text;
+    const box = document.getElementById('chat-messages');
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+}
+
+function addBotMsg(text) {
+    const el = document.createElement('div');
+    el.className = 'chat-msg bot';
+    el.textContent = text;
+    const box = document.getElementById('chat-messages');
+    box.appendChild(el);
+    box.scrollTop = box.scrollHeight;
+}
+
+function sendChat() {
+    const inp  = document.getElementById('chat-input');
+    const text = inp.value.trim();
+    if (!text) return;
+    inp.value = '';
+    addUserMsg(text);
+    document.getElementById('status-voice').textContent = text;
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+    })
+    .then(r => r.json())
+    .then(d => addBotMsg(d.reply || '…'))
+    .catch(() => addBotMsg('Connection error.'));
+}
+
+function sendChatCommand(text) {
+    fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: text })
+    })
+    .then(r => r.json())
+    .then(d => { if (d.reply) addBotMsg(d.reply); })
+    .catch(console.error);
+}
+
+// ── Web Speech API (mic button) ───────────────────────────────────
+const SpeechAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+if (SpeechAPI) {
+    recognition = new SpeechAPI();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (e) => {
+        const transcript = e.results[0][0].transcript;
+        document.getElementById('chat-input').value = transcript;
+        document.getElementById('status-voice').textContent = transcript;
+        sendChat();
+    };
+
+    recognition.onend = () => {
+        const btn = document.getElementById('mic-btn');
+        btn.classList.remove('listening');
+        btn.textContent = '🎤';
+    };
+
+    recognition.onerror = (e) => {
+        addBotMsg('Mic error: ' + e.error);
+        document.getElementById('mic-btn').classList.remove('listening');
+    };
+}
+
+function toggleMic() {
+    if (!recognition) { addBotMsg('Speech API not supported in this browser.'); return; }
+    const btn = document.getElementById('mic-btn');
+    if (btn.classList.contains('listening')) {
+        recognition.stop();
+    } else {
+        btn.classList.add('listening');
+        btn.textContent = '⏺';
+        try { recognition.start(); } catch(e) { console.error(e); }
+    }
+}
+
+// ── Keyboard shortcuts ────────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+    if (document.activeElement.tagName === 'INPUT') return;
+    const map = { ArrowUp:'forward', ArrowDown:'backward',
+                  ArrowLeft:'left', ArrowRight:'right', ' ':'stop' };
+    if (map[e.key]) { e.preventDefault(); sendCmd(map[e.key]); }
+});
+document.addEventListener('keyup', (e) => {
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.key)) sendCmd('stop');
+});
+</script>
+</body>
+</html>
