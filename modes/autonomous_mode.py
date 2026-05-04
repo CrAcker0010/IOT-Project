@@ -1,3 +1,19 @@
+"""
+autonomous_mode.py
+==================
+Obstacle-avoidance navigation using a single HC-SR04 mounted on
+the Pan-Tilt servo (SweeperSonar).
+
+Behaviour:
+  1. The SweeperSonar continuously sweeps left → front → right.
+  2. If the front reading is in the DANGER zone  → reverse + decide.
+  3. If the front reading is in the WARNING zone → slow steer.
+  4. Otherwise                                   → drive forward.
+
+Turning decision is always based on which side has MORE clearance
+from the latest sweep — no separate left/right sensors needed.
+"""
+
 import time
 import threading
 import os
@@ -7,112 +23,151 @@ from utils.config import SETTINGS
 
 logger = get_logger("AutonomousMode")
 
+DANGER_CM   = SETTINGS.get("DANGER_THRESHOLD_CM",   15)
+OBSTACLE_CM = SETTINGS.get("OBSTACLE_THRESHOLD_CM", 30)
+
+
 class AutonomousMode:
-    def __init__(self, motors, sensors, speaker=None):
-        self.motors = motors
-        self.sensors = sensors # dict containing "front", "left", "right"
+    """
+    Autonomous driving using a single sweeping ultrasonic sensor.
+
+    Args:
+        motors  : MotorController
+        sonar   : SweeperSonar instance
+        speaker : SpeakerOutput (optional)
+    """
+
+    def __init__(self, motors, sonar, speaker=None):
+        self.motors  = motors
+        self.sonar   = sonar        # SweeperSonar — replaces sensors dict
         self.speaker = speaker
         self.running = False
-        self.thread = None
+        self.thread  = None
 
-        # Fresh Gemini Initialization specific to Autonomous Mode
-        self.api_key = os.environ.get("GEMINI_API_KEY", "YOUR_API_KEY_HERE")
-        self.model = None
+        # ── Gemini navigation commentary ────────────────────────
         self.chat = None
-        
-        if self.api_key and self.api_key != "YOUR_API_KEY_HERE":
+        api_key = os.environ.get("GEMINI_API_KEY", "YOUR_API_KEY_HERE")
+        if api_key and api_key != "YOUR_API_KEY_HERE":
             try:
-                genai.configure(api_key=self.api_key)
-                self.model = genai.GenerativeModel('gemini-1.5-flash')
-                self.chat = self.model.start_chat(history=[])
-                
-                # Autonomous Mode specific system prompt
-                system_prompt = (
+                genai.configure(api_key=api_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                self.chat = model.start_chat(history=[])
+                self.chat.send_message(
                     "You are the intelligent navigation computer of an autonomous car. "
                     "You process sensor data to make quick, logical driving decisions. "
-                    "Keep your responses extremely short, technical, and precise, as if "
-                    "reporting to a dashboard console. Maximum 1 sentence."
+                    "Keep your responses extremely short, technical, and precise. "
+                    "Maximum 1 sentence."
                 )
-                self.chat.send_message(system_prompt)
-                logger.info("Autonomous Mode Gemini intelligence initialized.")
+                logger.info("Autonomous Mode Gemini initialized.")
             except Exception as e:
-                logger.error(f"Failed to initialize Gemini in Autonomous Mode: {e}")
-        else:
-            logger.warning("No GEMINI_API_KEY found. Autonomous Mode will run without cloud intelligence.")
+                logger.error(f"Gemini init failed: {e}")
 
-    def get_navigation_decision(self, sensor_data):
+    # ── AI commentary (optional) ──────────────────────────────────
+    def _ai_comment(self, context: str) -> str:
         if not self.chat:
-            return "Navigating."
+            return ""
         try:
-            prompt = f"Sensor readings - {sensor_data}. What is your navigation decision?"
-            response = self.chat.send_message(prompt)
-            return response.text.strip()
+            return self.chat.send_message(context).text.strip()
         except Exception as e:
-            logger.error(f"Gemini API error: {e}")
-            return "Navigating."
+            logger.error(f"Gemini error: {e}")
+            return ""
 
+    # ── Core decision logic ───────────────────────────────────────
+    def _decide(self, scan: dict):
+        """
+        Given a sweep scan dict {left, front, right}, execute
+        the appropriate motor command.
+        """
+        front = scan["front"]
+        left  = scan["left"]
+        right = scan["right"]
+
+        # Values of -1 mean sensor timed out — treat as very close
+        if front < 0: front = 0
+        if left  < 0: left  = 0
+        if right < 0: right = 0
+
+        # ── DANGER: obstacle extremely close ──────────────────────
+        if 0 < front < DANGER_CM:
+            logger.warning(f"DANGER! Front={front}cm. Reversing.")
+            self.motors.backward(speed=50)
+            time.sleep(0.5)
+            self.motors.stop()
+
+            # After reversing, turn toward the clearer side
+            if left >= right:
+                logger.info("Turning LEFT (more clearance).")
+                self.motors.left(speed=60)
+            else:
+                logger.info("Turning RIGHT (more clearance).")
+                self.motors.right(speed=60)
+            time.sleep(0.4)
+            self.motors.stop()
+
+            if self.speaker:
+                self.speaker.speak(
+                    self._ai_comment(
+                        f"Critical obstacle front at {front}cm. "
+                        f"Left clearance: {left}cm. Right: {right}cm. "
+                        "Evasive maneuver executed."
+                    )
+                )
+
+        # ── WARNING: obstacle ahead, steer gently ─────────────────
+        elif 0 < front < OBSTACLE_CM:
+            logger.info(f"Obstacle ahead at {front}cm. Steering.")
+            if left >= right:
+                self.motors.left(speed=50)
+            else:
+                self.motors.right(speed=50)
+            time.sleep(0.25)
+            self.motors.stop()
+
+        # ── CLEAR: drive forward ──────────────────────────────────
+        else:
+            self.motors.forward(speed=SETTINGS.get("MOTOR_SPEED_DEFAULT", 50))
+
+    # ── Main loop ─────────────────────────────────────────────────
+    def _run_loop(self):
+        commentary_tick = 0
+
+        while self.running:
+            # Get the latest sweep result
+            # We call sweep() directly here so each loop tick triggers
+            # a fresh physical measurement. The servo sweeps L→C→R
+            # every loop iteration (~0.5 seconds per full sweep).
+            scan = self.sonar.sweep()
+            self._decide(scan)
+
+            # Every ~30 loops (~15 sec), ask Gemini to comment
+            commentary_tick += 1
+            if commentary_tick >= 30 and self.speaker:
+                commentary_tick = 0
+                f, l, r = scan["front"], scan["left"], scan["right"]
+                comment = self._ai_comment(
+                    f"Route update — Front: {f}cm, Left: {l}cm, Right: {r}cm."
+                )
+                if comment:
+                    self.speaker.speak(comment)
+
+    # ── Public API ────────────────────────────────────────────────
     def start(self):
         if self.running:
             return
         self.running = True
-        self.thread = threading.Thread(target=self._run_loop, daemon=True)
+        self.thread  = threading.Thread(target=self._run_loop, daemon=True)
         self.thread.start()
         logger.info("Autonomous mode started.")
-        
         if self.speaker:
-            self.speaker.speak(self.get_navigation_decision("Starting engine and beginning autonomous route computation."))
-
-    def _run_loop(self):
-        decision_timer = 0
-        while self.running:
-            front_dist = self.sensors["front"].get_distance()
-            left_dist = self.sensors["left"].get_distance()
-            right_dist = self.sensors["right"].get_distance()
-            
-            # Basic collision avoidance logic
-            if front_dist > 0 and front_dist < SETTINGS["DANGER_THRESHOLD_CM"]:
-                logger.warning("Obstacle too close! Stopping and reversing.")
-                self.motors.backward(speed=50)
-                time.sleep(0.5)
-                self.motors.stop()
-                
-                # Check sides
-                if left_dist > right_dist:
-                    self.motors.left(speed=60)
-                else:
-                    self.motors.right(speed=60)
-                time.sleep(0.5)
-                self.motors.stop()
-                
-                # AI comment on danger
-                if self.speaker:
-                    sensor_str = f"Critical obstacle front at {front_dist}cm. Evasive maneuver executed."
-                    self.speaker.speak(self.get_navigation_decision(sensor_str))
-                
-            elif front_dist > 0 and front_dist < SETTINGS["OBSTACLE_THRESHOLD_CM"]:
-                logger.info("Obstacle detected ahead. Turning.")
-                if left_dist > right_dist:
-                    self.motors.left(speed=50)
-                else:
-                    self.motors.right(speed=50)
-                time.sleep(0.3)
-                
-            else:
-                self.motors.forward(speed=SETTINGS["MOTOR_SPEED_DEFAULT"])
-                
-            # Periodically let the AI comment on the route
-            decision_timer += 1
-            if decision_timer > 100: # Every ~10 seconds
-                if self.speaker:
-                    sensor_str = f"Front: {front_dist}cm, Left: {left_dist}cm, Right: {right_dist}cm. Path clear."
-                    self.speaker.speak(self.get_navigation_decision(sensor_str))
-                decision_timer = 0
-                
-            time.sleep(0.1)
+            self.speaker.speak(
+                self._ai_comment(
+                    "Starting engine. Beginning autonomous route computation."
+                ) or "Autonomous mode activated."
+            )
 
     def stop(self):
         self.running = False
         if self.thread:
-            self.thread.join()
+            self.thread.join(timeout=3)
         self.motors.stop()
         logger.info("Autonomous mode stopped.")

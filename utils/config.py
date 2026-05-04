@@ -11,15 +11,10 @@ PINS = {
     "MOTOR_IN3": 26,
     "MOTOR_IN4": 19,
     
-    # Ultrasonic Sensors (Trig, Echo)
+    # Single Ultrasonic Sensor (HC-SR04) mounted on Pan-Tilt servo
+    # The SweeperSonar class physically rotates the servo to scan L/F/R
     "US_FRONT_TRIG": 17,
     "US_FRONT_ECHO": 27,
-    "US_LEFT_TRIG": 22,
-    "US_LEFT_ECHO": 10,
-    "US_RIGHT_TRIG": 9,
-    "US_RIGHT_ECHO": 11,
-    "US_DOWN_TRIG": 20,
-    "US_DOWN_ECHO": 21,
     
     # DHT11 Sensor
     "DHT11_PIN": 4,

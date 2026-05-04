@@ -38,12 +38,12 @@ WAIT_AT_SURVIVOR_SEC = 10
 class RescueMode:
     """
     Autonomous rescue bot.
-    Requires: motors, sensors (dict: front/left/right), servos, speaker, camera.
+    Requires: motors, sonar (SweeperSonar), servos, speaker, camera.
     """
 
-    def __init__(self, motors, sensors: dict, servos, speaker, camera=None):
+    def __init__(self, motors, sonar, servos, speaker, camera=None):
         self.motors  = motors
-        self.sensors = sensors     # {"front": UltrasonicSensor, "left": ..., "right": ...}
+        self.sonar   = sonar       # SweeperSonar
         self.servos  = servos
         self.speaker = speaker
         self.camera  = camera
@@ -96,23 +96,22 @@ class RescueMode:
         self.speaker.speak(situation)
 
     # ── Obstacle navigation ───────────────────────────────────────
-    def _navigate_obstacle(self, front_dist: float, left_dist: float, right_dist: float):
-        if front_dist < DANGER_CM:
-            logger.warning(f"Danger zone! front={front_dist:.1f}cm — reversing.")
+    def _avoid_obstacle(self):
+        scan  = self.sonar.sweep()
+        front = scan["front"]
+        left  = scan["left"]
+        right = scan["right"]
+        if front > 0 and front < 15:
             self.motors.backward(speed=45)
-            time.sleep(0.6)
+            time.sleep(0.5)
             self.motors.stop()
-
-        # Turn toward the side with more space
-        if left_dist >= right_dist:
-            logger.info("Turning left to avoid obstacle.")
+        if left >= right:
             self.motors.left(speed=50)
         else:
-            logger.info("Turning right to avoid obstacle.")
             self.motors.right(speed=50)
-        time.sleep(0.4)
+        time.sleep(0.35)
         self.motors.stop()
-        time.sleep(0.2)
+        time.sleep(0.15)
 
     # ── Face detection ────────────────────────────────────────────
     def _detect_face(self, frame) -> bool:
@@ -156,17 +155,17 @@ class RescueMode:
         face_check_interval = 5   # Check every N ticks (~0.5 s)
 
         while self.running:
-            front = self.sensors["front"].get_distance()
-            left  = self.sensors["left"].get_distance()
-            right = self.sensors["right"].get_distance()
+            # Sweep sensor to get all 3 directions from the single sonar
+            scan  = self.sonar.sweep()
+            front = scan["front"]
 
             # Obstacle handling
             if 0 < front < OBSTACLE_CM:
-                self._navigate_obstacle(front, left, right)
+                self._avoid_obstacle()
             else:
                 self.motors.forward(speed=40)   # Slow, cautious advance
 
-            # Servo pan sweep
+            # Servo pan sweep (camera widens search angle)
             self._sweep_servos(tick)
 
             # Periodic face detection

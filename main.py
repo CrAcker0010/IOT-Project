@@ -5,6 +5,7 @@ from utils.logger import get_logger
 from utils.config import PINS
 from utils.lcd_display import LCDDisplay
 from sensors.ultrasonic import UltrasonicSensor
+from sensors.sweeper_sonar import SweeperSonar
 from sensors.gyroscope import MPU6050
 from actuators.motors import MotorController
 from actuators.servo import ServoController
@@ -29,27 +30,26 @@ class RobotSystem:
         self.motors = MotorController()
         self.servos = ServoController()
         
-        # Sensors
-        self.us_front = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Front")
-        self.us_left = UltrasonicSensor(PINS["US_LEFT_TRIG"], PINS["US_LEFT_ECHO"], "Left")
-        self.us_right = UltrasonicSensor(PINS["US_RIGHT_TRIG"], PINS["US_RIGHT_ECHO"], "Right")
+        # Sensors — single HC-SR04 mounted on the pan-tilt servo
+        self.us_sensor = UltrasonicSensor(
+            PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Sweeper"
+        )
         self.gyroscope = MPU6050()
-        
+
+        # SweeperSonar: rotates the servo to get left/front/right readings
+        # NOTE: ServosController must be initialized before this
+        self.sonar = SweeperSonar(self.us_sensor, self.servos)
+
         # Peripherals
         self.speaker = SpeakerOutput()
-        self.camera = CameraStream()
-        
-        # Modes
-        sensors_dict = {
-            "front": self.us_front,
-            "left": self.us_left,
-            "right": self.us_right
-        }
-        self.autonomous_mode   = AutonomousMode(self.motors, sensors_dict, self.speaker)
+        self.camera  = CameraStream()
+
+        # Modes — all receive sonar instead of a fixed sensors dict
+        self.autonomous_mode   = AutonomousMode(self.motors, self.sonar, self.speaker)
         self.pet_mode          = PetMode(self.motors, self.servos, self.speaker, self.camera)
         self.surveillance_mode = SurveillanceMode(self.camera, self.speaker)
-        self.rescue_mode       = RescueMode(self.motors, sensors_dict, self.servos, self.speaker, self.camera)
-        self.search_mode       = SearchMode(self.motors, sensors_dict, self.servos, self.speaker, self.camera)
+        self.rescue_mode       = RescueMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
+        self.search_mode       = SearchMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
         self.vision_drive_mode = VisionDriveMode(self.motors, self.camera, self.servos, self.speaker)
         
         # Voice Brain (chatbot + command dispatcher)

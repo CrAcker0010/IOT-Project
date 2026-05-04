@@ -58,9 +58,9 @@ class SearchMode:
     Requires: motors, sensors (dict: front/left/right), servos, speaker, camera.
     """
 
-    def __init__(self, motors, sensors: dict, servos, speaker, camera=None):
+    def __init__(self, motors, sonar, servos, speaker, camera=None):
         self.motors  = motors
-        self.sensors = sensors
+        self.sonar   = sonar       # SweeperSonar
         self.servos  = servos
         self.speaker = speaker
         self.camera  = camera
@@ -181,9 +181,11 @@ class SearchMode:
         end_time = time.time() + duration
 
         while time.time() < end_time and self.running and not self.target_found:
-            front = self.sensors["front"].get_distance()
-            left  = self.sensors["left"].get_distance()
-            right = self.sensors["right"].get_distance()
+            # Single sonar does a physical sweep each call
+            scan  = self.sonar.sweep()
+            front = scan["front"]
+            left  = scan["left"]
+            right = scan["right"]
 
             if 0 < front < OBSTACLE_CM and direction == "forward":
                 self._avoid_obstacle(front, left, right)
