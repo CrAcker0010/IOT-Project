@@ -388,6 +388,26 @@ def set_mode():
     print(f"[MODE] → {current_mode}")
     return jsonify({"status": "ok", "mode": current_mode})
 
+# ── Debug: Motor pin test ─────────────────────────────────────────
+@app.route('/api/test')
+def test_motors():
+    """Visit http://<PI_IP>:5000/api/test to test each motor pin."""
+    results = {"ON_PI": ON_PI, "pins": {}}
+    if ON_PI:
+        for name in ["MOTOR_IN1", "MOTOR_IN2", "MOTOR_IN3", "MOTOR_IN4"]:
+            pin = PINS[name]
+            try:
+                GPIO.output(pin, GPIO.HIGH)
+                time.sleep(0.5)
+                GPIO.output(pin, GPIO.LOW)
+                results["pins"][name] = f"GPIO {pin} OK"
+            except Exception as e:
+                results["pins"][name] = f"GPIO {pin} ERROR: {e}"
+    else:
+        results["message"] = "NOT on Raspberry Pi — GPIO unavailable"
+    print(f"[TEST] {results}")
+    return jsonify(results)
+
 # ── Dashboard ─────────────────────────────────────────────────────
 @app.route('/')
 def index():
