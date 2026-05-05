@@ -16,6 +16,8 @@ from flask import Flask, Response, render_template_string, request, jsonify
 # ═══════════════════════════════════════════════════════════════════
 try:
     import RPi.GPIO as GPIO
+    GPIO.setwarnings(False)
+    GPIO.setmode(GPIO.BCM)
     ON_PI = True
 except ImportError:
     ON_PI = False
@@ -23,60 +25,55 @@ except ImportError:
 
 # ── Pin Configuration (BCM) ──────────────────────────────────────
 PINS = {
+    # Motor Driver (L298N)
     "MOTOR_ENA": 12, "MOTOR_ENB": 13,
     "MOTOR_IN1": 5,  "MOTOR_IN2": 6,
     "MOTOR_IN3": 26, "MOTOR_IN4": 19,
+    # Servos (Pan-Tilt)
     "SERVO_PAN": 20, "SERVO_TILT": 21,
+    # Ultrasonic Sensors
+    "US_FRONT_TRIG": 17, "US_FRONT_ECHO": 27,  # On servo (directional sweeper)
+    "US_BACK_TRIG":  22, "US_BACK_ECHO":  10,  # Rear (parking system)
+    "US_DOWN_TRIG":  9,  "US_DOWN_ECHO":  11,  # Faces ground (road quality)
+    # Peripherals
+    "DHT11_PIN": 4,       # Temperature & humidity
+    "BUZZER":    18,      # Alert buzzer
+    "MIC_PIN":   8,       # Sound sensor D0 (clap detection)
+    "LED_RED":   23,
+    "LED_GREEN": 24,
+    "LED_BLUE":  25,
+    # I2C: MPU6050 + LCD on GPIO 2 (SDA) / GPIO 3 (SCL) — hardware default
 }
+
+OBSTACLE_CM = 30
+DANGER_CM = 15
 
 # ═══════════════════════════════════════════════════════════════════
 # MOTOR CONTROLLER
 # ═══════════════════════════════════════════════════════════════════
 class MotorController:
+    """L298N motor driver — ENA/ENB jumpers are ON (always enabled)."""
     def __init__(self):
         if not ON_PI:
             return
-        GPIO.setmode(GPIO.BCM)
-        self._pins = [
-            PINS["MOTOR_IN1"], PINS["MOTOR_IN2"],
-            PINS["MOTOR_IN3"], PINS["MOTOR_IN4"],
-            PINS["MOTOR_ENA"], PINS["MOTOR_ENB"],
-        ]
-        for p in self._pins:
+        for p in [PINS["MOTOR_IN1"], PINS["MOTOR_IN2"],
+                  PINS["MOTOR_IN3"], PINS["MOTOR_IN4"]]:
             GPIO.setup(p, GPIO.OUT)
             GPIO.output(p, GPIO.LOW)
-        self.pwm_a = GPIO.PWM(PINS["MOTOR_ENA"], 1000)
-        self.pwm_b = GPIO.PWM(PINS["MOTOR_ENB"], 1000)
-        self.pwm_a.start(0)
-        self.pwm_b.start(0)
-
-    def _speed(self, s):
-        if not ON_PI: return
-        s = max(0, min(100, s))
-        self.pwm_a.ChangeDutyCycle(s)
-        self.pwm_b.ChangeDutyCycle(s)
 
     def _set(self, a, b, c, d):
         if not ON_PI: return
-        GPIO.output(PINS["MOTOR_IN1"], a)
-        GPIO.output(PINS["MOTOR_IN2"], b)
-        GPIO.output(PINS["MOTOR_IN3"], c)
-        GPIO.output(PINS["MOTOR_IN4"], d)
+        GPIO.output(PINS["MOTOR_IN1"], GPIO.HIGH if a else GPIO.LOW)
+        GPIO.output(PINS["MOTOR_IN2"], GPIO.HIGH if b else GPIO.LOW)
+        GPIO.output(PINS["MOTOR_IN3"], GPIO.HIGH if c else GPIO.LOW)
+        GPIO.output(PINS["MOTOR_IN4"], GPIO.HIGH if d else GPIO.LOW)
 
-    def forward(self, speed=50):
-        self._speed(speed); self._set(1, 0, 1, 0)
-    def backward(self, speed=50):
-        self._speed(speed); self._set(0, 1, 0, 1)
-    def left(self, speed=50):
-        self._speed(speed); self._set(0, 1, 1, 0)
-    def right(self, speed=50):
-        self._speed(speed); self._set(1, 0, 0, 1)
-    def stop(self):
-        self._speed(0); self._set(0, 0, 0, 0)
-    def cleanup(self):
-        self.stop()
-        if ON_PI:
-            self.pwm_a.stop(); self.pwm_b.stop()
+    def forward(self):  self._set(1, 0, 1, 0)
+    def backward(self): self._set(0, 1, 0, 1)
+    def left(self):     self._set(0, 1, 1, 0)
+    def right(self):    self._set(1, 0, 0, 1)
+    def stop(self):     self._set(0, 0, 0, 0)
+    def cleanup(self):  self.stop()
 
 # ═══════════════════════════════════════════════════════════════════
 # SERVO CONTROLLER (Pan-Tilt)
@@ -120,6 +117,94 @@ class ServoController:
             self.pan_pwm.stop(); self.tilt_pwm.stop()
 
 # ═══════════════════════════════════════════════════════════════════
+# ULTRASONIC SENSOR
+# ═══════════════════════════════════════════════════════════════════
+class UltrasonicSensor:
+    """Single HC-SR04 ultrasonic distance sensor."""
+    def __init__(self, trig_pin, echo_pin, name="Sensor"):
+        self.trig = trig_pin
+        self.echo = echo_pin
+        self.name = name
+        if not ON_PI: return
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(self.trig, GPIO.OUT)
+        GPIO.setup(self.echo, GPIO.IN)
+        GPIO.output(self.trig, False)
+
+    def get_distance(self):
+        """Returns distance in cm, or -1 on timeout."""
+        if not ON_PI: return 100.0  # Simulated
+        try:
+            GPIO.output(self.trig, True)
+            time.sleep(0.00001)
+            GPIO.output(self.trig, False)
+            pulse_start = time.time()
+            pulse_end = time.time()
+            timeout_start = time.time()
+            while GPIO.input(self.echo) == 0:
+                pulse_start = time.time()
+                if pulse_start - timeout_start > 0.1: return -1
+            while GPIO.input(self.echo) == 1:
+                pulse_end = time.time()
+                if pulse_end - timeout_start > 0.1: return -1
+            return round((pulse_end - pulse_start) * 17150, 2)
+        except Exception as e:
+            print(f"[US-{self.name}] Error: {e}")
+            return -1
+
+# ═══════════════════════════════════════════════════════════════════
+# SWEEPER SONAR (front sensor on servo — sweeps L/C/R)
+# ═══════════════════════════════════════════════════════════════════
+PAN_LEFT, PAN_CENTER, PAN_RIGHT = 50, 90, 130
+
+class SweeperSonar:
+    """Rotates the front ultrasonic sensor via the pan servo to scan 3 directions."""
+    def __init__(self, sensor, servos):
+        self.sensor = sensor
+        self.servos = servos
+        self._lock = threading.Lock()
+        self._running = False
+        self.last_scan = {"left": 999.0, "front": 999.0, "right": 999.0}
+        self._pan(PAN_CENTER)
+
+    def _pan(self, angle):
+        self.servos.set_pan(angle)
+        time.sleep(0.15)
+
+    def read_front(self):
+        with self._lock:
+            self._pan(PAN_CENTER)
+            return self.sensor.get_distance()
+
+    def sweep(self):
+        """Sweep left→center→right. Returns {left, front, right} in cm."""
+        with self._lock:
+            self._pan(PAN_LEFT)
+            left = self.sensor.get_distance()
+            self._pan(PAN_CENTER)
+            front = self.sensor.get_distance()
+            self._pan(PAN_RIGHT)
+            right = self.sensor.get_distance()
+            self._pan(PAN_CENTER)
+        self.last_scan = {"left": left, "front": front, "right": right}
+        return self.last_scan
+
+    def start_continuous_sweep(self):
+        if self._running: return
+        self._running = True
+        threading.Thread(target=self._worker, daemon=True).start()
+
+    def _worker(self):
+        while self._running:
+            try: self.sweep()
+            except: pass
+            time.sleep(0.4)
+
+    def stop_continuous_sweep(self):
+        self._running = False
+        self._pan(PAN_CENTER)
+
+# ═══════════════════════════════════════════════════════════════════
 # CAMERA STREAM (threaded capture)
 # ═══════════════════════════════════════════════════════════════════
 class CameraStream:
@@ -153,6 +238,87 @@ servos = ServoController()
 camera = CameraStream()
 current_mode = "idle"
 
+# 3 Ultrasonic Sensors
+us_front = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Front")
+us_back  = UltrasonicSensor(PINS["US_BACK_TRIG"],  PINS["US_BACK_ECHO"],  "Back")
+us_down  = UltrasonicSensor(PINS["US_DOWN_TRIG"],  PINS["US_DOWN_ECHO"],  "Down")
+
+# Sweeper sonar (front sensor mounted on servo)
+sonar = SweeperSonar(us_front, servos)
+
+# ═══════════════════════════════════════════════════════════════════
+# AUTONOMOUS MODE (acts on ultrasonic inputs)
+# ═══════════════════════════════════════════════════════════════════
+auto_running = False
+auto_thread = None
+
+def autonomous_decide(scan):
+    """Given a sweep scan {left, front, right}, drive accordingly."""
+    # CLIFF CHECK (sensor faces ground — if >20cm, there's a drop)
+    down = us_down.get_distance()
+    if down > 20 or down < 0:
+        motors.stop()
+        print(f"[AUTO] CLIFF! down={down}cm — STOPPED")
+        return
+
+    front = scan["front"] if scan["front"] >= 0 else 0
+    left  = scan["left"]  if scan["left"]  >= 0 else 0
+    right = scan["right"] if scan["right"] >= 0 else 0
+
+    # DANGER: very close obstacle — reverse then turn
+    if 0 < front < DANGER_CM:
+        print(f"[AUTO] DANGER front={front}cm — reversing")
+        back = us_back.get_distance()
+        if back > 15 or back < 0:
+            motors.backward()
+            time.sleep(0.5)
+        motors.stop()
+        # Turn toward the clearer side
+        if left >= right:
+            motors.left()
+        else:
+            motors.right()
+        time.sleep(0.4)
+        motors.stop()
+
+    # WARNING: obstacle ahead — steer around it
+    elif 0 < front < OBSTACLE_CM:
+        print(f"[AUTO] Obstacle front={front}cm — steering")
+        if left >= right:
+            motors.left()
+        else:
+            motors.right()
+        time.sleep(0.25)
+        motors.stop()
+
+    # CLEAR: drive forward
+    else:
+        motors.forward()
+
+def autonomous_loop():
+    """Background thread: sweep sensors and act."""
+    global auto_running
+    print("[AUTO] Autonomous mode STARTED")
+    while auto_running:
+        scan = sonar.sweep()
+        autonomous_decide(scan)
+        time.sleep(0.1)
+    motors.stop()
+    print("[AUTO] Autonomous mode STOPPED")
+
+def start_autonomous():
+    global auto_running, auto_thread
+    if auto_running:
+        return
+    auto_running = True
+    auto_thread = threading.Thread(target=autonomous_loop, daemon=True)
+    auto_thread.start()
+
+def stop_autonomous():
+    global auto_running
+    auto_running = False
+    motors.stop()
+
 # ═══════════════════════════════════════════════════════════════════
 # FLASK APP
 # ═══════════════════════════════════════════════════════════════════
@@ -177,18 +343,17 @@ def video_feed():
 def control():
     data = request.json or {}
     cmd = data.get('command', '')
-    speed = data.get('speed', 50)
     actions = {
-        'forward': lambda: motors.forward(speed),
-        'backward': lambda: motors.backward(speed),
-        'left': lambda: motors.left(speed),
-        'right': lambda: motors.right(speed),
+        'forward': motors.forward,
+        'backward': motors.backward,
+        'left': motors.left,
+        'right': motors.right,
         'stop': motors.stop,
     }
     fn = actions.get(cmd)
     if fn:
         fn()
-    print(f"[MOTOR] {cmd} speed={speed}")
+    print(f"[MOTOR] {cmd}")
     return jsonify({"status": "ok"})
 
 # ── Camera Pan/Tilt API ──────────────────────────────────────────
@@ -210,8 +375,15 @@ def camera_control():
 def set_mode():
     global current_mode
     data = request.json or {}
-    current_mode = data.get('mode', 'idle')
-    if current_mode == 'idle':
+    new_mode = data.get('mode', 'idle')
+    # Stop previous mode
+    if current_mode == 'autonomous':
+        stop_autonomous()
+    current_mode = new_mode
+    # Start new mode
+    if current_mode == 'autonomous':
+        start_autonomous()
+    elif current_mode == 'idle':
         motors.stop()
     print(f"[MODE] → {current_mode}")
     return jsonify({"status": "ok", "mode": current_mode})
