@@ -571,13 +571,12 @@ function toggleLight(n) {
     const btn = document.getElementById(`light${n}-btn`);
     btn.textContent = on ? 'ON' : 'OFF';
     btn.className   = `relay-toggle ${on ? 'on' : 'off'}`;
-    fetch(`/api/control`, {  // routed via chat_text → voice_brain
+    
+    fetch('/api/home', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ command: `light_${n}_${on ? 'on' : 'off'}` })
-    }).catch(() => {});
-    // Correct route: use chatbot command dispatcher
-    sendChatCommand(`turn ${on ? 'on' : 'off'} light ${n}`);
+        body: JSON.stringify({ endpoint: `/light/${n}/${on ? 'on' : 'off'}` })
+    }).catch(console.error);
 }
 
 function toggleDoor() {
@@ -585,7 +584,12 @@ function toggleDoor() {
     const btn = document.getElementById('door4-btn');
     btn.textContent = doorOpen ? 'OPEN' : 'CLOSED';
     btn.className   = `relay-toggle ${doorOpen ? 'on' : 'off'}`;
-    sendChatCommand(doorOpen ? 'open door' : 'close door');
+    
+    fetch('/api/home', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: `/door/4/${doorOpen ? 'on' : 'off'}` })
+    }).catch(console.error);
 }
 
 function allOff() {
@@ -597,7 +601,12 @@ function allOff() {
     doorOpen = false;
     const db = document.getElementById('door4-btn');
     db.textContent = 'CLOSED'; db.className = 'relay-toggle off';
-    sendChatCommand('turn off all');
+    
+    fetch('/api/home', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ endpoint: `/all/off` })
+    }).catch(console.error);
 }
 
 // ── Chatbot ───────────────────────────────────────────────────────
