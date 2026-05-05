@@ -4,18 +4,11 @@ smbus2==0.4.2
 
 # ── Camera & Vision ───────────────────────────────
 opencv-python==4.8.0.76
-ultralytics>=8.0.0
 Pillow>=10.0.0
-
-# ── Audio (Text-to-Speech) ────────────────────────
-pyttsx3==2.90
 
 # ── GPS ───────────────────────────────────────────
 pynmea2==1.19.0
 pyserial==3.5
-
-# ── AI Brain (Gemini) ────────────────────────────
-google-generativeai
 
 # ── Web Dashboard ────────────────────────────────
 Flask==2.3.3

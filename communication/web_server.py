@@ -1,3 +1,15 @@
+"""
+web_server.py — Manual Control Web Dashboard
+==============================================
+Flask server providing:
+  - Live camera feed
+  - Motor control (forward/backward/left/right/stop)
+  - Camera pan/tilt control
+  - Speed adjustment
+  - Home automation relay control
+  - Sensor data API
+"""
+
 from flask import Flask, render_template, Response, request, jsonify
 import cv2
 import threading
@@ -42,10 +54,6 @@ def control():
     
     if not robot_instance:
         return jsonify({"status": "error"}), 500
-        
-    # Set to manual if driving remotely
-    if command in ['forward', 'backward', 'left', 'right', 'stop']:
-        robot_instance.set_mode("idle")
     
     if command == 'forward':
         robot_instance.motors.forward(speed)
@@ -83,110 +91,38 @@ def camera_control():
         
     return jsonify({"status": "success"})
 
-@app.route('/api/pet/call', methods=['POST'])
-def call_pet():
-    if robot_instance:
-        logger.info("Web interface called the pet!")
-        robot_instance.set_mode("pet")
-        if hasattr(robot_instance.pet_mode, 'called_by_owner'):
-            robot_instance.pet_mode.called_by_owner()
-        return jsonify({"status": "pet_called"})
-    return jsonify({"status": "error"})
-
-@app.route('/api/rescue', methods=['POST'])
-def rescue():
-    """Activate / deactivate rescue mode."""
-    if not robot_instance:
-        return jsonify({"status": "error", "message": "Robot not initialised"}), 500
-    data   = request.json or {}
-    action = data.get("action", "start")   # "start" or "stop"
-    if action == "start":
-        robot_instance.set_mode("rescue")
-        logger.info("Rescue mode started via web API.")
-        return jsonify({"status": "rescue_started"})
-    else:
-        robot_instance.set_mode("idle")
-        logger.info("Rescue mode stopped via web API.")
-        return jsonify({"status": "rescue_stopped"})
-
-@app.route('/api/search', methods=['POST'])
-def search():
-    """Activate / deactivate search mode with an optional target description."""
-    if not robot_instance:
-        return jsonify({"status": "error", "message": "Robot not initialised"}), 500
-    data   = request.json or {}
-    action = data.get("action", "start")           # "start" or "stop"
-    target = data.get("target", "any object or person of interest")
-    if action == "start":
-        robot_instance.set_mode("search", search_target=target)
-        logger.info(f"Search mode started via web API. Target: '{target}'")
-        return jsonify({"status": "search_started", "target": target})
-    else:
-        robot_instance.set_mode("idle")
-        logger.info("Search mode stopped via web API.")
-        return jsonify({"status": "search_stopped"})
-
-
-@app.route('/api/chat', methods=['POST'])
-def chat():
-    """Send a text message to the AI chatbot / command parser."""
+@app.route('/api/sensors', methods=['GET'])
+def sensors():
+    """Return current sensor readings."""
     if not robot_instance:
         return jsonify({"status": "error"}), 500
-    data    = request.json or {}
-    message = data.get("message", "").strip()
-    if not message:
-        return jsonify({"reply": "Please say something."})
-    try:
-        reply = robot_instance.voice_brain.chat_text(message)
-        return jsonify({"reply": reply})
-    except Exception as e:
-        logger.error(f"Chat error: {e}")
-        return jsonify({"reply": "Sorry, the chatbot encountered an error."}), 500
 
-@app.route('/api/vision_drive', methods=['POST'])
-def vision_drive():
-    """Start or stop camera-based autonomous driving mode."""
-    if not robot_instance:
-        return jsonify({"status": "error"}), 500
-    data   = request.json or {}
-    action = data.get("action", "start")
-    if action == "start":
-        robot_instance.set_mode("vision_drive")
-        return jsonify({"status": "vision_drive_started"})
-    else:
-        robot_instance.set_mode("idle")
-        return jsonify({"status": "vision_drive_stopped"})
+    data = {
+        "front": robot_instance.us_front.get_distance(),
+        "back":  robot_instance.us_back.get_distance(),
+        "down":  robot_instance.us_down.get_distance(),
+    }
 
-@app.route('/api/vision/check', methods=['POST'])
-def vision_check():
-    """
-    Run one or more vision functions on the current camera frame on demand.
-    Body: { "checks": ["lane", "obstacle", "yolo"] }
-    Returns the latest result dicts (debug frames excluded for JSON).
-    """
-    if not robot_instance or not hasattr(robot_instance, 'vision_drive_mode'):
-        return jsonify({"status": "error"}), 500
+    if robot_instance.gyroscope:
+        try:
+            ax, ay, az = robot_instance.gyroscope.get_accel_data()
+            data["accel"] = {"x": round(ax, 2), "y": round(ay, 2), "z": round(az, 2)}
+        except Exception:
+            pass
 
-    data   = request.json or {}
-    checks = data.get("checks", ["lane", "obstacle", "yolo"])
-    vdm    = robot_instance.vision_drive_mode
-    frame  = robot_instance.camera.frame if robot_instance.camera else None
-    out    = {}
+    return jsonify({"status": "ok", "sensors": data})
 
-    if "lane" in checks:
-        r = vdm.run_lane_check(frame)
-        out["lane"] = {k: v for k, v in r.items() if k != "debug_frame"}
+@app.route('/api/home', methods=['POST'])
+def home_automation():
+    """Forward a command to the NodeMCU home automation controller."""
+    data = request.json or {}
+    endpoint = data.get("endpoint", "")
+    if not endpoint:
+        return jsonify({"status": "error", "message": "No endpoint provided"}), 400
 
-    if "obstacle" in checks:
-        r = vdm.run_obstacle_check(frame)
-        out["obstacle"] = {k: v for k, v in r.items() if k != "debug_frame"}
-
-    if "yolo" in checks:
-        filter_cls = data.get("filter_classes", None)
-        r = vdm.run_yolo_check(frame, filter_classes=filter_cls)
-        out["yolo"] = {k: v for k, v in r.items() if k != "debug_frame"}
-
-    return jsonify({"status": "ok", "results": out})
+    from communication.home_automation import send_command
+    result = send_command(endpoint)
+    return jsonify({"status": "ok", "result": result})
 
 
 def run_server(host='0.0.0.0', port=5000):

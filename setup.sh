@@ -18,7 +18,6 @@ sudo apt-get install -y \
     python3-pip python3-venv python3-dev \
     python3-smbus i2c-tools \
     libopencv-dev python3-opencv \
-    espeak espeak-ng \
     libatlas-base-dev
 
 # ── 2. Enable I2C and Camera ─────────────────────────────────────
@@ -48,10 +47,7 @@ echo "════════════════════════�
 echo "  SETUP COMPLETE!"
 echo "═══════════════════════════════════════════════════════════"
 echo ""
-echo "  Before running, set your Gemini API key:"
-echo "    export GEMINI_API_KEY=\"your-key-here\""
-echo ""
-echo "  Then start the robot:"
+echo "  Start the robot:"
 echo "    source venv/bin/activate"
 echo "    python3 main.py"
 echo ""

@@ -161,6 +161,7 @@ class LCDDisplay:
             "rescue"      : "RESCUE BOT",
             "search"      : "SEARCH BOT",
             "idle"        : "STANDBY  (idle)",
+            "manual"      : "MANUAL  (remote)",
         }
         label = mode_labels.get(mode.lower(), mode.upper())
         self._write_lines(">> MODE:", label)

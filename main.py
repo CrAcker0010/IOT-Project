@@ -1,7 +1,7 @@
 """
 main.py — IOT Robot Main Controller
 =====================================
-Entry point for the autonomous multipurpose robotic car.
+Entry point for the manually-controlled robotic car.
 Run: python3 main.py
 """
 
@@ -12,19 +12,11 @@ from utils.logger import get_logger
 from utils.config import PINS, SETTINGS
 from utils.lcd_display import LCDDisplay
 from sensors.ultrasonic import UltrasonicSensor
-from sensors.sweeper_sonar import SweeperSonar
 from sensors.gyroscope import MPU6050
 from actuators.motors import MotorController
 from actuators.servo import ServoController
-from audio.speaker_output import SpeakerOutput
 from audio.voice_brain import VoiceBrain
 from vision.camera_stream import CameraStream
-from modes.autonomous_mode import AutonomousMode
-from modes.pet_mode import PetMode
-from modes.surveillance_mode import SurveillanceMode
-from modes.rescue_mode import RescueMode
-from modes.search_mode import SearchMode
-from modes.vision_drive_mode import VisionDriveMode
 from communication.web_server import init_web_server, start_server_thread
 
 logger = get_logger("MainController")
@@ -39,9 +31,9 @@ class RobotSystem:
         self.servos = ServoController()
 
         # ── Sensors ───────────────────────────────────────────────
-        self.us_sweeper = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Sweeper")
-        self.us_back    = UltrasonicSensor(PINS["US_BACK_TRIG"],  PINS["US_BACK_ECHO"],  "Back")
-        self.us_down    = UltrasonicSensor(PINS["US_DOWN_TRIG"],  PINS["US_DOWN_ECHO"],  "Down")
+        self.us_front = UltrasonicSensor(PINS["US_FRONT_TRIG"], PINS["US_FRONT_ECHO"], "Front")
+        self.us_back  = UltrasonicSensor(PINS["US_BACK_TRIG"],  PINS["US_BACK_ECHO"],  "Back")
+        self.us_down  = UltrasonicSensor(PINS["US_DOWN_TRIG"],  PINS["US_DOWN_ECHO"],  "Down")
 
         # Gyroscope (I2C — may fail if not wired)
         self.gyroscope = None
@@ -50,44 +42,21 @@ class RobotSystem:
         except Exception as e:
             logger.warning(f"Gyroscope not available: {e}")
 
-        # SweeperSonar handles the physical rotation of the front sensor
-        self.sonar = SweeperSonar(self.us_sweeper, self.servos)
-
         # ── Peripherals ───────────────────────────────────────────
-        self.speaker = SpeakerOutput()
         self.camera  = CameraStream()
 
-        # ── Modes ─────────────────────────────────────────────────
-        self.autonomous_mode   = AutonomousMode(self.motors, self.sonar, self.us_back, self.us_down, self.speaker)
-        self.pet_mode          = PetMode(self.motors, self.servos, self.speaker, self.camera)
-        self.surveillance_mode = SurveillanceMode(self.camera, self.speaker)
-        self.rescue_mode       = RescueMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
-        self.search_mode       = SearchMode(self.motors, self.sonar, self.servos, self.speaker, self.camera)
-        self.vision_drive_mode = VisionDriveMode(self.motors, self.camera, self.servos, self.speaker)
-
-        # ── Voice Brain (chatbot + command dispatcher) ────────────
+        # ── Clap detector (emergency stop) ────────────────────────
         self.voice_brain = VoiceBrain(robot=self)
 
         # ── LCD Display (I2C 0x27) ────────────────────────────────
         self.lcd = LCDDisplay()
 
         # ── Current state ─────────────────────────────────────────
-        self.current_mode = None
+        self.current_mode = "manual"
         logger.info("System fully initialized.")
-
-    # ── Mode registry (avoids repetitive if/elif chains) ──────────
-    _MODE_MAP = {
-        "autonomous":   "autonomous_mode",
-        "pet":          "pet_mode",
-        "surveillance": "surveillance_mode",
-        "rescue":       "rescue_mode",
-        "search":       "search_mode",
-        "vision_drive": "vision_drive_mode",
-    }
 
     def start(self):
         try:
-            self.speaker.greet()
             self.camera.start()
             self.voice_brain.start()
 
@@ -110,19 +79,10 @@ class RobotSystem:
             init_web_server(self)
             start_server_thread(port=SETTINGS["STREAM_PORT"])
 
-            logger.info("Robot ready. Entering main loop...")
-
-            # Start idle (user picks mode from dashboard)
-            self.set_mode("idle")
+            logger.info("Robot ready. Manual control via web dashboard.")
+            self.lcd.show_mode("manual")
 
             while True:
-                # Periodic gyroscope check (if available)
-                if self.gyroscope:
-                    try:
-                        if self.gyroscope.detect_rough_road():
-                            logger.warning("Rough road detected!")
-                    except Exception:
-                        pass
                 time.sleep(1)
 
         except KeyboardInterrupt:
@@ -132,34 +92,7 @@ class RobotSystem:
             logger.error(f"System error: {e}")
             self.cleanup()
 
-    def set_mode(self, mode_name, search_target: str = None):
-        # Stop current mode
-        if self.current_mode and self.current_mode in self._MODE_MAP:
-            mode_obj = getattr(self, self._MODE_MAP[self.current_mode], None)
-            if mode_obj and hasattr(mode_obj, 'stop'):
-                try:
-                    mode_obj.stop()
-                except Exception as e:
-                    logger.error(f"Error stopping {self.current_mode}: {e}")
-
-        self.current_mode = mode_name
-        self.lcd.show_mode(mode_name)
-
-        # Start new mode
-        if mode_name in self._MODE_MAP:
-            mode_obj = getattr(self, self._MODE_MAP[mode_name])
-            if mode_name == "search":
-                mode_obj.start(target=search_target)
-            else:
-                mode_obj.start()
-        elif mode_name == "idle":
-            self.motors.stop()
-        else:
-            logger.warning(f"Unknown mode: {mode_name}")
-
     def cleanup(self):
-        try: self.set_mode("idle")
-        except Exception: pass
         try: self.voice_brain.stop()
         except Exception: pass
         try: self.lcd.cleanup()

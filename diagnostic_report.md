@@ -143,7 +143,7 @@ if any(w in t for w in WAKE_WORDS):
 **Root cause:** The `generate_content()` call passes image data as a plain dict `{"mime_type": ..., "data": bytes}`. The correct format for `google-generativeai >= 0.5` is to use `PIL.Image` or `genai.types.Part`.  
 **Fix:**
 ```python
-from google.generativeai.types import Part
+from google.genai.types import Part
 image_part = Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
 response = self.vision_model.generate_content([prompt, image_part])
 ```

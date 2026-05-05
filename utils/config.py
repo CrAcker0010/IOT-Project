@@ -1,5 +1,4 @@
 # System Configuration File
-import os
 
 # GPIO Pins Configuration (BCM Mode)
 PINS = {
@@ -50,7 +49,6 @@ SETTINGS = {
     "GPS_BAUD": 9600,
     "GPS_PORT": "/dev/serial0",
     "NODEMCU_PORT": "/dev/ttyUSB0",
-    "GEMINI_API_KEY": os.environ.get("GEMINI_API_KEY", "YOUR_API_KEY_HERE")
 }
 
 import json
