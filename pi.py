@@ -295,29 +295,24 @@ def autonomous_decide(scan):
     else:
         motors.forward()
 
-def autonomous_loop():
-    """Background thread: sweep sensors and act."""
-    global auto_running
-    print("[AUTO] Autonomous mode STARTED")
-    while auto_running:
-        scan = sonar.sweep()
-        autonomous_decide(scan)
-        time.sleep(0.1)
-    motors.stop()
-    print("[AUTO] Autonomous mode STOPPED")
-
-def start_autonomous():
-    global auto_running, auto_thread
-    if auto_running:
-        return
-    auto_running = True
-    auto_thread = threading.Thread(target=autonomous_loop, daemon=True)
-    auto_thread.start()
-
-def stop_autonomous():
-    global auto_running
-    auto_running = False
-    motors.stop()
+# ═══════════════════════════════════════════════════════════════════
+# MANUAL DRIVE MODE (D-pad only, no autonomous actions)
+# ═══════════════════════════════════════════════════════════════════
+def manual_drive(command):
+    """Execute a single motor command from D-pad input."""
+    actions = {
+        'forward':  motors.forward,
+        'backward': motors.backward,
+        'left':     motors.left,
+        'right':    motors.right,
+        'stop':     motors.stop,
+    }
+    fn = actions.get(command)
+    if fn:
+        fn()
+        print(f"[MANUAL] {command}")
+    else:
+        print(f"[MANUAL] Unknown command: {command}")
 
 # ═══════════════════════════════════════════════════════════════════
 # FLASK APP
@@ -343,17 +338,10 @@ def video_feed():
 def control():
     data = request.json or {}
     cmd = data.get('command', '')
-    actions = {
-        'forward': motors.forward,
-        'backward': motors.backward,
-        'left': motors.left,
-        'right': motors.right,
-        'stop': motors.stop,
-    }
-    fn = actions.get(cmd)
-    if fn:
-        fn()
-    print(f"[MOTOR] {cmd}")
+    if current_mode in ('idle', 'manual'):
+        manual_drive(cmd)
+    else:
+        print(f"[MOTOR] Ignored '{cmd}' — mode is '{current_mode}'")
     return jsonify({"status": "ok"})
 
 # ── Camera Pan/Tilt API ──────────────────────────────────────────
@@ -376,15 +364,8 @@ def set_mode():
     global current_mode
     data = request.json or {}
     new_mode = data.get('mode', 'idle')
-    # Stop previous mode
-    if current_mode == 'autonomous':
-        stop_autonomous()
+    motors.stop()  # Always stop before switching
     current_mode = new_mode
-    # Start new mode
-    if current_mode == 'autonomous':
-        start_autonomous()
-    elif current_mode == 'idle':
-        motors.stop()
     print(f"[MODE] → {current_mode}")
     return jsonify({"status": "ok", "mode": current_mode})
 
