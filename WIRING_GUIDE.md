@@ -17,8 +17,8 @@ To keep wiring clean and manageable, use the power lanes on your breadboard:
 | | GND | GND Breadboard Rail |
 | | 12V | Battery + |
 | **Ultrasonic Front** | VCC | 3.3V Breadboard Rail (Workaround) |
-| | TRIG | Pin 11 (GPIO 17) |
-| | ECHO | Pin 13 (GPIO 27) |
+| | TRIG | Pin 21 (GPIO 9) |
+| | ECHO | Pin 23 (GPIO 11) |
 | | GND | GND Breadboard Rail |
 | **Ultrasonic Back** 
 | VCC | 3.3V Breadboard Rail (Workaround) |
@@ -26,8 +26,8 @@ To keep wiring clean and manageable, use the power lanes on your breadboard:
 | | ECHO | Pin 19 (GPIO 10) |
 | | GND | GND Breadboard Rail |
 | **Ultrasonic Down** | VCC | 3.3V Breadboard Rail (Workaround) |
-| | TRIG | Pin 21 (GPIO 9) |
-| | ECHO | Pin 23 (GPIO 11) |
+| | TRIG | Pin 11 (GPIO 17) |
+| | ECHO | Pin 13 (GPIO 27) |
 | | GND | GND Breadboard Rail |
 | **Servo PAN** | Signal | Pin 38 (GPIO 20) |
 | | VCC | 5V BEC |

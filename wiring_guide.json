@@ -17,8 +17,8 @@
       "component": "Ultrasonic Front",
       "pins": {
         "VCC": "Pin 2 (5V)",
-        "TRIG": "Pin 11 (GPIO 17)",
-        "ECHO": "Pin 13 (GPIO 27) (via divider)",
+        "TRIG": "Pin 21 (GPIO 9)",
+        "ECHO": "Pin 23 (GPIO 11) (via divider)",
         "GND": "Pin 14 (GND)"
       }
     },
@@ -35,8 +35,8 @@
       "component": "Ultrasonic Down",
       "pins": {
         "VCC": "Pin 4 (5V)",
-        "TRIG": "Pin 21 (GPIO 9)",
-        "ECHO": "Pin 23 (GPIO 11) (via divider)",
+        "TRIG": "Pin 11 (GPIO 17)",
+        "ECHO": "Pin 13 (GPIO 27) (via divider)",
         "GND": "Pin 25 (GND)"
       }
     },

@@ -11,12 +11,12 @@ PINS = {
     "MOTOR_IN4": 19,
     
     # Ultrasonic Sensors
-    "US_FRONT_TRIG": 17,  # On Pan-Tilt servo
-    "US_FRONT_ECHO": 27,
+    "US_FRONT_TRIG": 9,  # On Pan-Tilt servo
+    "US_FRONT_ECHO": 11,
     "US_BACK_TRIG":  22,
     "US_BACK_ECHO":  10,
-    "US_DOWN_TRIG":  9,
-    "US_DOWN_ECHO":  11,
+    "US_DOWN_TRIG":  17,
+    "US_DOWN_ECHO":  27,
     
     # DHT11 Sensor
     "DHT11_PIN": 4,
