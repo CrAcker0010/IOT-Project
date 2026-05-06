@@ -18,6 +18,7 @@ from actuators.servo import ServoController
 from audio.voice_brain import VoiceBrain
 from vision.camera_stream import CameraStream
 from communication.web_server import init_web_server, start_server_thread
+from modes.auto_mode import AutoMode
 
 logger = get_logger("MainController")
 
@@ -50,6 +51,9 @@ class RobotSystem:
 
         # ── LCD Display (I2C 0x27) ────────────────────────────────
         self.lcd = LCDDisplay()
+
+        # ── Modes ─────────────────────────────────────────────────
+        self.auto_mode = AutoMode(self)
 
         # ── Current state ─────────────────────────────────────────
         self.current_mode = "manual"
@@ -93,6 +97,8 @@ class RobotSystem:
             self.cleanup()
 
     def cleanup(self):
+        try: self.auto_mode.stop()
+        except Exception: pass
         try: self.voice_brain.stop()
         except Exception: pass
         try: self.lcd.cleanup()

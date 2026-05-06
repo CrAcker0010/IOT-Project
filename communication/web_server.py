@@ -91,6 +91,21 @@ def camera_control():
         
     return jsonify({"status": "success"})
 
+@app.route('/api/auto', methods=['POST'])
+def auto_mode():
+    data = request.json or {}
+    action = data.get('action')
+    
+    if not robot_instance or not hasattr(robot_instance, 'auto_mode'):
+        return jsonify({"status": "error", "message": "AutoMode not initialized"}), 500
+        
+    if action == 'start':
+        robot_instance.auto_mode.start()
+    elif action == 'stop':
+        robot_instance.auto_mode.stop()
+        
+    return jsonify({"status": "success"})
+
 @app.route('/api/sensors', methods=['GET'])
 def sensors():
     """Return current sensor readings."""
