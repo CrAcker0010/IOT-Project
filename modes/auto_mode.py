@@ -24,10 +24,37 @@ class AutoMode:
             return
         self.running = True
         self.thread = threading.Thread(target=self._auto_loop, daemon=True)
+        self.lcd_thread = threading.Thread(target=self._lcd_update_loop, daemon=True)
+        
         self.thread.start()
+        self.lcd_thread.start()
         logger.info("Autonomous mode started.")
-        if hasattr(self.robot, 'lcd') and self.robot.lcd:
-            self.robot.lcd.show_mode("AUTO")
+
+    def _lcd_update_loop(self):
+        """Displays 'AUTO' for 5 seconds, then shows live sensor scores."""
+        if not hasattr(self.robot, 'lcd') or not self.robot.lcd:
+            return
+
+        # Phase 1: Show AUTO MODE for 5 seconds
+        self.robot.lcd.show_mode("AUTO")
+        start_time = time.time()
+        
+        while self.running and (time.time() - start_time) < 5:
+            time.sleep(0.5)
+
+        # Phase 2: Show live sensor/score data
+        dots = 0
+        while self.running:
+            dot_str = "." * (dots % 4)
+            dist = self.robot.us_front.get_distance()
+            # If distance is err, show '??'
+            dist_str = f"{dist:.0f}cm" if dist >= 0 else "Err"
+            
+            # Show Front distance as the 'score' metric for Auto Mode
+            self.robot.lcd.show_text(f"Auto Running{dot_str}", f"Front: {dist_str}")
+            
+            dots += 1
+            time.sleep(1.0)
 
     def stop(self):
         if not self.running:
@@ -35,6 +62,8 @@ class AutoMode:
         self.running = False
         if self.thread:
             self.thread.join(timeout=2.0)
+        if hasattr(self, 'lcd_thread') and self.lcd_thread:
+            self.lcd_thread.join(timeout=1.0)
         self.robot.motors.stop()
         self.robot.servos.set_pan(90)
         self.robot.servos.set_tilt(90)
