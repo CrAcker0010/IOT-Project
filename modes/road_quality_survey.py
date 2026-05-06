@@ -18,6 +18,7 @@ class RoadQualitySurvey:
         
         # Scoring metrics
         self.bump_score = 0.0
+        self.cliff_events = 0
         self.total_readings = 0
 
     def start(self):
@@ -25,6 +26,7 @@ class RoadQualitySurvey:
             return
         self.running = True
         self.bump_score = 0.0
+        self.cliff_events = 0
         self.total_readings = 0
         
         self.thread = threading.Thread(target=self._survey_loop, daemon=True)
@@ -55,16 +57,28 @@ class RoadQualitySurvey:
             self.robot.lcd.show_text(f"Quality: {final_score}/100", "Survey Done")
 
     def _calculate_score(self):
-        """Calculates a 0-100 score based on Z-axis gravity deviations."""
+        """
+        Calculates a 0-100 road quality score.
+        100 = Perfect, 0 = Extremely Rough / Dangerous.
+        Uses MPU6050 Z-axis variance and Cliff sensor distance anomalies.
+        """
         if self.total_readings == 0:
             return 100
             
-        avg_bump = self.bump_score / self.total_readings
+        # 1. MPU6050 Component (Vibrations)
+        # Average deviation from 1.0g (ideal gravity)
+        avg_vibration = self.bump_score / self.total_readings
         
-        # A perfectly smooth road has 0 variance (approx 1g constantly).
-        # We heavily penalize high average variance.
-        score = 100 - (avg_bump * 200) 
-        return max(0, min(100, int(score)))
+        # Penalize vibrations (0.5 deviation is already very rough)
+        vibration_score = 100 - (avg_vibration * 150)
+        
+        # 2. Cliff Component (Potholes/Edges)
+        # Each cliff event (dist > 15cm) reduces the score significantly
+        cliff_penalty = self.cliff_events * 5 # 5 points off per pothole detected
+        
+        # Final weighted combine
+        final_score = vibration_score - cliff_penalty
+        return max(0, min(100, int(final_score)))
 
     def _lcd_animation_loop(self):
         """Displays 'Reading' with animating dots on the LCD."""
@@ -134,9 +148,9 @@ class RoadQualitySurvey:
                     
                 # Read downward sensor (could be used to detect severe potholes)
                 down_dist = self.robot.us_down.get_distance()
-                if down_dist > 15: # Severe pothole / edge
-                    self.bump_score += 2.0 # Huge penalty
-                    self.total_readings += 1
+                if down_dist > 15: # Severe pothole / edge detected
+                    self.cliff_events += 1
+                    logger.warning(f"Pothole/Cliff detected! Dist: {down_dist}cm")
                 
                 # 2. Forward Movement and Obstacle Detection
                 front_dist = self.robot.us_front.get_distance()
