@@ -67,14 +67,14 @@ class RoadQualitySurvey:
         return max(0, min(100, int(score)))
 
     def _lcd_animation_loop(self):
-        """Displays 'Reading' with animating dots on the LCD."""
+        """Displays 'Reading' and live score on the LCD."""
         dots = 0
         while self.running:
             if hasattr(self.robot, 'lcd') and self.robot.lcd:
                 dot_str = "." * (dots % 4)
-                # Pad to clear old dots
                 display_str = f"Reading{dot_str}".ljust(16)
-                self.robot.lcd.show_text(display_str, "Scanning Area...")
+                current_score = self._calculate_score()
+                self.robot.lcd.show_text(display_str, f"Score: {current_score}/100")
             dots += 1
             time.sleep(0.5)
 
