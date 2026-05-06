@@ -135,6 +135,11 @@ class LCDDisplay:
         lines = [line1, line2, line3, line4]
         self._write_lines(*lines[:self.rows])
 
+    def show_text(self, line1: str = "", line2: str = "",
+                  line3: str = "", line4: str = ""):
+        """Alias for show_message."""
+        self.show_message(line1, line2, line3, line4)
+
     def show_startup(self):
         """Splash screen shown when the robot boots."""
         self._stop_scroll()
