@@ -19,6 +19,7 @@ from audio.voice_brain import VoiceBrain
 from vision.camera_stream import CameraStream
 from communication.web_server import init_web_server, start_server_thread
 from modes.auto_mode import AutoMode
+from modes.road_quality_survey import RoadQualitySurvey
 
 logger = get_logger("MainController")
 
@@ -54,6 +55,7 @@ class RobotSystem:
 
         # ── Modes ─────────────────────────────────────────────────
         self.auto_mode = AutoMode(self)
+        self.survey_mode = RoadQualitySurvey(self)
 
         # ── Current state ─────────────────────────────────────────
         self.current_mode = "manual"
@@ -97,6 +99,8 @@ class RobotSystem:
             self.cleanup()
 
     def cleanup(self):
+        try: self.survey_mode.stop()
+        except Exception: pass
         try: self.auto_mode.stop()
         except Exception: pass
         try: self.voice_brain.stop()

@@ -106,6 +106,21 @@ def auto_mode():
         
     return jsonify({"status": "success"})
 
+@app.route('/api/survey', methods=['POST'])
+def survey_mode():
+    data = request.json or {}
+    action = data.get('action')
+    
+    if not robot_instance or not hasattr(robot_instance, 'survey_mode'):
+        return jsonify({"status": "error", "message": "SurveyMode not initialized"}), 500
+        
+    if action == 'start':
+        robot_instance.survey_mode.start()
+    elif action == 'stop':
+        robot_instance.survey_mode.stop()
+        
+    return jsonify({"status": "success"})
+
 @app.route('/api/sensors', methods=['GET'])
 def sensors():
     """Return current sensor readings."""
