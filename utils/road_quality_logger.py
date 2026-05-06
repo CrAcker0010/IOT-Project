@@ -13,6 +13,7 @@ class RoadQualityLogger:
     """
     def __init__(self, gyroscope, interval=0.1, threshold=0.4):
         self.gyroscope = gyroscope
+        # self.ultrasonic_down = ultrasonic.UltrasonicSensor("down")
         self.interval = interval
         self.threshold = threshold
         self.running = False
