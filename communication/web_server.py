@@ -31,7 +31,7 @@ def index():
 def gen_frames():
     while True:
         if robot_instance and robot_instance.camera and robot_instance.camera.frame is not None:
-            rotated_frame = robot_instance.camera.frame
+            rotated_frame = cv2.rotate(robot_instance.camera.frame, cv2.ROTATE_180)
             ret, buffer = cv2.imencode('.jpg', rotated_frame)
             if ret:
                 frame = buffer.tobytes()
