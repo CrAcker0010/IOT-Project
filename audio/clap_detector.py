@@ -5,10 +5,11 @@ Detects clap patterns using the D0 (Digital Out) pin of a
 KY-037/KY-038 Sound Sensor Module connected to the Raspberry Pi.
 
 Clap patterns:
-  1 clap  → Emergency stop
-  2 claps → Toggle autonomous mode on/off
-  3 claps → Start/stop rescue mode
-  4 claps → Start/stop search mode
+  1 clap  → Stop
+  2 claps → Move Forward
+  3 claps → Move Backward
+  4 claps → Move Left
+  5 claps → Move Right
 
 The potentiometer on the module must be adjusted so that
 D0 goes LOW on a clap and stays HIGH when quiet.
@@ -25,7 +26,7 @@ logger = get_logger("ClapDetector")
 # ── Timing constants ──────────────────────────────────────────────
 CLAP_WINDOW       = 1.2    # Max seconds to wait for additional claps
 CLAP_DEBOUNCE     = 0.15   # Ignore signals shorter than this apart (noise filter)
-MAX_CLAPS         = 4      # Maximum claps in a pattern
+MAX_CLAPS         = 5      # Maximum claps in a pattern
 
 
 class ClapDetector:

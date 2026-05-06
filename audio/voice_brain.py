@@ -28,22 +28,30 @@ class VoiceBrain:
         logger.info(f"Clap pattern received: {clap_count} clap(s)")
         r = self.robot
 
-        if clap_count == 1:
-            # Emergency stop
-            if r:
-                r.motors.stop()
-            logger.info("Emergency stop triggered by clap.")
-            if r and hasattr(r, 'lcd'):
-                r.lcd.show_voice_command("1 clap: STOP")
+        if not r or not hasattr(r, 'motors'):
+            return
 
-        elif clap_count >= 2:
-            # Log sensor distances to LCD
-            if r:
-                front = r.us_front.get_distance()
-                back  = r.us_back.get_distance()
-                logger.info(f"Sensors — Front: {front}cm, Back: {back}cm")
-                if hasattr(r, 'lcd'):
-                    r.lcd.show_sensor_data(front=front)
+        speed = 50
+        if clap_count == 1:
+            r.motors.stop()
+            logger.info("1 clap: STOP")
+            if hasattr(r, 'lcd') and r.lcd: r.lcd.show_text("STOP", "Clap Control")
+        elif clap_count == 2:
+            r.motors.forward(speed)
+            logger.info("2 claps: FORWARD")
+            if hasattr(r, 'lcd') and r.lcd: r.lcd.show_text("FORWARD", "Clap Control")
+        elif clap_count == 3:
+            r.motors.backward(speed)
+            logger.info("3 claps: BACKWARD")
+            if hasattr(r, 'lcd') and r.lcd: r.lcd.show_text("BACKWARD", "Clap Control")
+        elif clap_count == 4:
+            r.motors.left(speed)
+            logger.info("4 claps: LEFT")
+            if hasattr(r, 'lcd') and r.lcd: r.lcd.show_text("LEFT", "Clap Control")
+        elif clap_count == 5:
+            r.motors.right(speed)
+            logger.info("5 claps: RIGHT")
+            if hasattr(r, 'lcd') and r.lcd: r.lcd.show_text("RIGHT", "Clap Control")
 
     # ── Public API ────────────────────────────────────────────────
     def start(self):

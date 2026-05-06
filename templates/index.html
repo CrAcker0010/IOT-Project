@@ -318,10 +318,6 @@
             <div class="mode-grid">
                 <button class="mode-btn" onclick="setMode('autonomous')">🧭 Autonomous</button>
                 <button class="mode-btn" onclick="setMode('survey')">🛣️ Road Survey</button>
-                <button class="mode-btn" onclick="setMode('pet')">🐕 Pet Mode</button>
-                <button class="mode-btn" onclick="setMode('surveillance')">👁 Surveillance</button>
-                <button class="mode-btn" onclick="setMode('rescue')">🆘 Rescue Bot</button>
-                <button class="mode-btn" onclick="openSearch()">🔍 Search Bot</button>
                 <button class="mode-btn mode-stop" style="grid-column:1/-1" onclick="setMode('idle')">⏹ STOP ALL</button>
             </div>
             <div style="margin-top:0.5rem;">
@@ -528,10 +524,9 @@ function setMode(mode) {
         : JSON.stringify({ command: mode });
 
     if (!endpoint && mode === 'idle') {
-        // Stop rescue/vision drive too
-        fetch('/api/rescue',       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
-        fetch('/api/vision_drive', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
-        fetch('/api/search',       { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
+        // Stop all background modes
+        fetch('/api/auto',   { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
+        fetch('/api/survey', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'stop'}) });
     }
 
     if (endpoint) {

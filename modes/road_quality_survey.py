@@ -67,7 +67,7 @@ class RoadQualitySurvey:
         return max(0, min(100, int(score)))
 
     def _lcd_animation_loop(self):
-        """Displays 'Reading' and live score on the LCD."""
+        """Displays 'Reading' with animating dots on the LCD."""
         dots = 0
         while self.running:
             if hasattr(self.robot, 'lcd') and self.robot.lcd:
