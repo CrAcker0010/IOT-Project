@@ -71,68 +71,83 @@ class AutoMode:
         if hasattr(self.robot, 'lcd') and self.robot.lcd:
             self.robot.lcd.show_mode("MANUAL")
 
+    def _turn_with_gyro(self, target_angle_deg):
+        """Turns the robot using gyroscope Z-axis integration."""
+        if not self.robot.gyroscope:
+            # Fallback to timing
+            if target_angle_deg > 0:
+                self.robot.motors.left(60)
+            else:
+                self.robot.motors.right(60)
+            time.sleep(abs(target_angle_deg) / 90.0 * 0.5)
+            self.robot.motors.stop()
+            return
+
+        current_angle = 0.0
+        last_time = time.time()
+        
+        if target_angle_deg > 0:
+            self.robot.motors.left(50)
+        else:
+            self.robot.motors.right(50)
+            
+        while self.running and abs(current_angle) < abs(target_angle_deg):
+            _, _, gz = self.robot.gyroscope.get_gyro_data()
+            current_time = time.time()
+            dt = current_time - last_time
+            last_time = current_time
+            current_angle += gz * dt
+            time.sleep(0.01)
+            
+        self.robot.motors.stop()
+
     def _auto_loop(self):
         """Main autonomous driving logic running in a background thread."""
         try:
-            # Ensure camera/sensors are facing directly forward
             self.robot.servos.set_pan(90)
             self.robot.servos.set_tilt(90)
             
             while self.running:
-                # 1. Cliff detection (down sensor)
-                # If distance > danger_dist, it means the ground dropped away (we are over an edge!)
+                # 1. Cliff detection
                 down_dist = self.robot.us_down.get_distance()
-                if down_dist > self.danger_dist or down_dist < 0:
-                    logger.warning("CLIFF DETECTED! Reversing...")
+                if 15 < down_dist < 200: # Genuine cliff/hole
+                    logger.warning(f"CLIFF DETECTED ({down_dist}cm)! Reversing...")
                     self.robot.motors.backward(60)
-                    time.sleep(1)
-                    self.robot.motors.left(60)
-                    time.sleep(0.5)
-                    self.robot.motors.stop()
+                    time.sleep(0.8)
+                    self._turn_with_gyro(90)
                     continue
 
-                # 2. Obstacle detection (front sensor)
+                # 2. Obstacle detection
                 front_dist = self.robot.us_front.get_distance()
-                if 0 < front_dist < self.obstacle_dist:
-                    logger.info(f"Obstacle detected at {front_dist:.1f}cm. Evading...")
+                if 0 < front_dist < 20: # User requested 20cm threshold
+                    logger.info(f"Obstacle at {front_dist:.1f}cm. Scanning...")
                     self.robot.motors.stop()
                     
-                    # Look left
+                    # Scan Left
                     self.robot.servos.set_pan(160)
                     time.sleep(0.5)
                     left_dist = self.robot.us_front.get_distance()
                     
-                    # Look right
+                    # Scan Right
                     self.robot.servos.set_pan(20)
                     time.sleep(0.5)
                     right_dist = self.robot.us_front.get_distance()
                     
-                    # Look center again
                     self.robot.servos.set_pan(90)
                     time.sleep(0.3)
                     
-                    # Decide where to go based on sensor sweeps
-                    if left_dist > right_dist and left_dist > self.obstacle_dist:
-                        logger.info("Path clear on Left. Turning Left.")
-                        self.robot.motors.left(60)
-                        time.sleep(0.5)
-                    elif right_dist > left_dist and right_dist > self.obstacle_dist:
-                        logger.info("Path clear on Right. Turning Right.")
-                        self.robot.motors.right(60)
-                        time.sleep(0.5)
+                    # Turn toward max distance
+                    if left_dist > right_dist and left_dist > 20:
+                        self._turn_with_gyro(90)
+                    elif right_dist > left_dist and right_dist > 20:
+                        self._turn_with_gyro(-90)
                     else:
-                        logger.info("Trapped! Reversing.")
-                        self.robot.motors.backward(60)
-                        time.sleep(1.0)
-                        self.robot.motors.right(60)
+                        self.robot.motors.backward(50)
                         time.sleep(0.8)
-                        
-                    self.robot.motors.stop()
+                        self._turn_with_gyro(180)
                 else:
-                    # Clear path, move forward
                     self.robot.motors.forward(50)
                     
-                # Small delay to prevent hogging the CPU
                 time.sleep(0.05) 
                 
         except Exception as e:
