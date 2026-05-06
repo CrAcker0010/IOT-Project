@@ -635,10 +635,10 @@ function sendChat() {
     fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ prompt: text })
     })
     .then(r => r.json())
-    .then(d => addBotMsg(d.reply || '…'))
+    .then(d => addBotMsg(d.response || d.message || '…'))
     .catch(() => addBotMsg('Connection error.'));
 }
 
@@ -646,10 +646,10 @@ function sendChatCommand(text) {
     fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
+        body: JSON.stringify({ prompt: text })
     })
     .then(r => r.json())
-    .then(d => { if (d.reply) addBotMsg(d.reply); })
+    .then(d => { if (d.response) addBotMsg(d.response); })
     .catch(console.error);
 }
 

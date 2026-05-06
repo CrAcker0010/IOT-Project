@@ -121,6 +121,20 @@ def survey_mode():
         
     return jsonify({"status": "success"})
 
+@app.route('/api/chat', methods=['POST'])
+def chat():
+    """Handle chat prompts from the dashboard using Gemini AI."""
+    data = request.json or {}
+    prompt = data.get("prompt", "")
+    if not prompt:
+        return jsonify({"status": "error", "message": "No prompt provided"}), 400
+
+    if not robot_instance or not hasattr(robot_instance, 'ai'):
+        return jsonify({"status": "error", "message": "AI not initialized"}), 500
+
+    response = robot_instance.ai.chat(prompt)
+    return jsonify({"status": "ok", "response": response})
+
 @app.route('/api/sensors', methods=['GET'])
 def sensors():
     """Return current sensor readings."""

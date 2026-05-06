@@ -49,6 +49,7 @@ SETTINGS = {
     "GPS_BAUD": 9600,
     "GPS_PORT": "/dev/serial0",
     "NODEMCU_PORT": "/dev/ttyUSB0",
+    "GEMINI_API_KEY": "AIzaSyC2Gl6ggN2_uMdr7upMgp8alyoa5cQMNC0", # Update this with your actual key
 }
 
 import json

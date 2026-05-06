@@ -20,6 +20,7 @@ from vision.camera_stream import CameraStream
 from communication.web_server import init_web_server, start_server_thread
 from modes.auto_mode import AutoMode
 from modes.road_quality_survey import RoadQualitySurvey
+from intelligence.gemini import GeminiAI
 
 logger = get_logger("MainController")
 
@@ -56,6 +57,9 @@ class RobotSystem:
         # ── Modes ─────────────────────────────────────────────────
         self.auto_mode = AutoMode(self)
         self.survey_mode = RoadQualitySurvey(self)
+
+        # ── Intelligence ──────────────────────────────────────────
+        self.ai = GeminiAI(api_key=SETTINGS.get("GEMINI_API_KEY"))
 
         # ── Current state ─────────────────────────────────────────
         self.current_mode = "manual"
