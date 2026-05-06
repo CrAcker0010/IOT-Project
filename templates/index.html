@@ -317,7 +317,7 @@
             <div class="panel-title">🚗 Robot Modes</div>
             <div class="mode-grid">
                 <button class="mode-btn" onclick="setMode('autonomous')">🧭 Autonomous</button>
-                <button class="mode-btn" onclick="setMode('vision_drive')">📷 Vision Drive</button>
+                <button class="mode-btn" onclick="setMode('survey')">🛣️ Road Survey</button>
                 <button class="mode-btn" onclick="setMode('pet')">🐕 Pet Mode</button>
                 <button class="mode-btn" onclick="setMode('surveillance')">👁 Surveillance</button>
                 <button class="mode-btn" onclick="setMode('rescue')">🆘 Rescue Bot</button>
@@ -518,7 +518,9 @@ function setMode(mode) {
     if (mode === 'search') { openSearch(); return; }
 
     const endpoint = (mode === 'rescue')       ? '/api/rescue'      :
-                     (mode === 'vision_drive') ? '/api/vision_drive' : null;
+                     (mode === 'vision_drive') ? '/api/vision_drive' :
+                     (mode === 'autonomous')   ? '/api/auto'         :
+                     (mode === 'survey')       ? '/api/survey'       : null;
 
     const url  = endpoint || '/api/control';
     const body = endpoint
