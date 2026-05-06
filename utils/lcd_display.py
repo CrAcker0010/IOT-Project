@@ -145,27 +145,27 @@ class LCDDisplay:
             self._write_lines("  IOT ROBOT v1.0", "  Initialising..")
         logger.info("LCD: startup screen shown.")
 
-    # def show_mode(self, mode: str):
-    #     """
-    #     Show the current operating mode.
+    def show_mode(self, mode: str):
+        """
+        Show the current operating mode.
 
-    #     Example:
-    #         lcd.show_mode("autonomous")
-    #     """
-    #     self._stop_scroll()
-    #     mode_labels = {
-    #         "autonomous"  : "AUTO  (Ultrasonic)",
-    #         "vision_drive": "VISION DRIVE",
-    #         "pet"         : "PET MODE  (follow)",
-    #         "surveillance": "SURVEILLANCE",
-    #         "rescue"      : "RESCUE BOT",
-    #         "search"      : "SEARCH BOT",
-    #         "idle"        : "STANDBY  (idle)",
-    #         "manual"      : "MANUAL  (remote)",
-    #     }
-    #     label = mode_labels.get(mode.lower(), mode.upper())
-    #     self._write_lines(">> MODE:", label)
-    #     logger.info(f"LCD: mode = {mode}")
+        Example:
+            lcd.show_mode("autonomous")
+        """
+        self._stop_scroll()
+        mode_labels = {
+            "autonomous"  : "AUTO  (Ultrasonic)",
+            "vision_drive": "VISION DRIVE",
+            "pet"         : "PET MODE  (follow)",
+            "surveillance": "SURVEILLANCE",
+            "rescue"      : "RESCUE BOT",
+            "search"      : "SEARCH BOT",
+            "idle"        : "STANDBY  (idle)",
+            "manual"      : "MANUAL  (remote)",
+        }
+        label = mode_labels.get(mode.lower(), mode.upper())
+        self._write_lines(">> MODE:", label)
+        logger.info(f"LCD: mode = {mode}")
 
     def show_sensor_data(self, front: float = -1,
                          left: float = -1, right: float = -1,
