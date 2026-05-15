@@ -2,30 +2,34 @@
 #  IOT Robot — Python Dependencies
 #  Target: Raspberry Pi 4 (1 GB RAM, 32-bit OS / armv7l)
 #
-#  All versions verified against piwheels.org for armv7l wheels.
-#  Uses headless OpenCV (no GUI) to save ~200 MB RAM.
+#  Optimized for low-memory environment.
 # ═══════════════════════════════════════════════════════════════════
 
-# ── Core Raspberry Pi ──────────────────────────────
+# ── Core Hardware ──────────────────────────────────
 RPi.GPIO==0.7.1
 smbus2==0.4.2
 
-# ── Camera & Vision (headless — saves RAM, no X11 needed) ────────
+# ── Camera & Vision ────────────────────────────────
+# Headless version avoids X11 deps and saves ~200MB RAM
 opencv-python-headless==4.10.0.84
 Pillow>=9.0.0,<11.0.0
 numpy<2.0.0
 
-# ── GPS ───────────────────────────────────────────
-pynmea2==1.19.0
-pyserial==3.5
+# ── AI & Intelligence ──────────────────────────────
+google-genai>=1.0.0
+# YOLOv8 (Heavy for 1GB RAM, use nano models)
+ultralytics>=8.1.0
 
-# ── Web Dashboard ────────────────────────────────
+# ── Web Dashboard ──────────────────────────────────
 Flask==2.3.3
-Werkzeug==2.3.7
 requests==2.31.0
 
-# ── AI (Gemini — pure Python, works on armv7l) ───
-google-genai>=1.0.0
+# ── Audio & Voice ──────────────────────────────────
+SpeechRecognition==3.10.0
+# PyAudio requires 'sudo apt-get install libasound-dev portaudio19-dev'
+PyAudio==0.2.14
 
-# ── LCD Display ──────────────────────────────────
+# ── Peripheral Drivers ─────────────────────────────
 RPLCD>=1.3.0
+pynmea2==1.19.0
+pyserial==3.5
