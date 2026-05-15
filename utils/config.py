@@ -41,8 +41,8 @@ SETTINGS = {
     "MOTOR_SPEED_DEFAULT": 50, # PWM Duty Cycle 0-100
     "OBSTACLE_THRESHOLD_CM": 30,
     "DANGER_THRESHOLD_CM": 15,
-    "CAMERA_RESOLUTION": (640, 480),
-    "CAMERA_FRAMERATE": 30,
+    "CAMERA_RESOLUTION": (320, 240),    # Low-res for 1 GB RAM (saves ~40 MB)
+    "CAMERA_FRAMERATE": 15,              # 15 fps is sufficient for robot nav
     "STREAM_PORT": 5000,
     "NODEMCU_IP": "192.168.1.100",   # ← update after flashing (check Serial Monitor)
     "NODEMCU_BAUD": 9600,
