@@ -36,7 +36,8 @@ sudo apt-get install -y \
     python3-smbus i2c-tools \
     libatlas-base-dev \
     libjpeg-dev zlib1g-dev libpng-dev \
-    libopenjp2-7 libtiff5
+    libopenjp2-7 libtiff5 \
+    libasound-dev portaudio19-dev
 
 # ── OpenCV headless runtime dependencies (32-bit Bullseye/Bookworm)
 sudo apt-get install -y \
